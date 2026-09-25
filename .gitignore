@@ -1,0 +1,8 @@
+node_modules
+data/
+
+.env.local
+.env.secrets
+
+# Obsolete, the configuration moved to .env - delete it once the password is in .env.secrets
+preview-controller.config.json
