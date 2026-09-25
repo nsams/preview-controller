@@ -1,0 +1,27 @@
+{
+    "name": "preview-controller",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
+        "dev": "node --watch --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
+        "lint": "run-p -l lint:{prettier,tsc}",
+        "lint:prettier": "npx prettier --check .",
+        "lint:tsc": "tsc --noEmit",
+        "lint:fix": "npx prettier --write ."
+    },
+    "dependencies": {
+        "@hono/node-server": "^1.15.0",
+        "hono": "^4.7.0"
+    },
+    "devDependencies": {
+        "@types/node": "^24.13.6",
+        "npm-run-all2": "^9.0.3",
+        "prettier": "^3.9.8",
+        "typescript": "^5.9.3"
+    },
+    "engines": {
+        "node": "24"
+    }
+}
