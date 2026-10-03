@@ -1,0 +1,9 @@
+{
+    "services": {
+        "web": {
+            "command": ["node", "server.mjs"],
+            "environment": { "PORT": "${PREVIEW_PORT}" },
+            "port": "${PREVIEW_PORT}"
+        }
+    }
+}

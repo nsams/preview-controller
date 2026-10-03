@@ -1,0 +1,3 @@
+#!/bin/sh
+# Put on the PATH of the controller by the end-to-end tests, see fake-docker.ts.
+exec node --no-warnings "$(dirname "$0")/../fake-docker.ts" "$@"

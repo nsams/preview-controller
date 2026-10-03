@@ -9,13 +9,15 @@
         "lint": "run-p -l lint:{prettier,tsc}",
         "lint:prettier": "npx prettier --check .",
         "lint:tsc": "tsc --noEmit",
-        "lint:fix": "npx prettier --write ."
+        "lint:fix": "npx prettier --write .",
+        "test:e2e": "playwright test"
     },
     "dependencies": {
         "@hono/node-server": "^1.15.0",
         "hono": "^4.7.0"
     },
     "devDependencies": {
+        "@playwright/test": "^1.63.0",
         "@types/node": "^24.13.6",
         "npm-run-all2": "^9.0.3",
         "prettier": "^3.9.8",

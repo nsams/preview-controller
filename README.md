@@ -243,6 +243,27 @@ The first entry is where the controller sends you after starting a preview. Only
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
 
+## Tests
+
+The end-to-end tests start the real controller and drive it through http and a browser:
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+They need neither docker nor GitHub. [e2e/support/fake-docker.ts](e2e/support/fake-docker.ts) is put
+on the `PATH` of the controller as `docker` and knows exactly the commands the controller uses; its
+"containers" are local processes. Clones of `https://github.com/<org>/<repo>.git` are rewritten to
+bare repositories on disk, which start out as [e2e/fixture-project](e2e/fixture-project) - a
+`start-preview.sh` that reports its urls and an app that answers every request with what it
+received. Every test worker runs its own controller with its own data directory, every test its
+own branch. A chromium that is already installed elsewhere can be used with
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+Not covered: the idle and cleanup sweeps, which run once a minute and are measured in minutes
+and days.
+
 ## Limitations
 
 - Http only towards the previews: websockets and other upgrades are not proxied. The previews
