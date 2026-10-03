@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+
+/** For changing things behind the back of the controller. */
+export async function docker(args: string[]): Promise<string> {
+    const { stdout } = await execFileAsync("docker", args, { timeout: 120_000 });
+    return stdout;
+}
 
 const supportDir = dirname(fileURLToPath(import.meta.url));
 const projectDir = join(supportDir, "..", "..");
@@ -168,8 +174,10 @@ export type PreviewJson = {
 };
 
 /**
- * One controller process with everything it talks to replaced: docker by fake-docker.ts, GitHub
- * by bare repositories on disk. Each test worker gets its own, so they can run in parallel.
+ * One controller process on the docker daemon of the machine, with GitHub replaced by bare
+ * repositories on disk. Each test worker gets its own, so they can run in parallel. The daemon is
+ * shared, so a controller sees the previews of the others too - and those of a controller that may
+ * run on the same machine for real, which is why it must never remove anything on its own.
  */
 export class Controller {
     readonly port: number;
@@ -189,8 +197,6 @@ export class Controller {
         this.reposDir = join(rootDir, "repos");
         this.env = {
             ...process.env,
-            PATH: `${join(supportDir, "bin")}:${process.env.PATH ?? ""}`,
-            FAKE_DOCKER_DIR: join(rootDir, "docker"),
             PREVIEW_CONTROLLER_PORT: String(port),
             PREVIEW_CONTROLLER_BASE_DOMAIN: baseDomain,
             PREVIEW_CONTROLLER_SCHEME: "http",
@@ -198,6 +204,8 @@ export class Controller {
             PREVIEW_CONTROLLER_PORT_RANGE: `${previewPorts.from}-${previewPorts.to}`,
             PREVIEW_CONTROLLER_DATA_DIR: this.dataDir,
             PREVIEW_CONTROLLER_GITHUB_TOKEN: "",
+            PREVIEW_CONTROLLER_REMOVE_AFTER_DAYS: "0",
+            PREVIEW_CONTROLLER_IDLE_TIMEOUT_MINUTES: "1440",
             // Clones and fetches of https://github.com/<org>/<repo>.git end up in the bare repositories.
             GIT_CONFIG_COUNT: "1",
             GIT_CONFIG_KEY_0: `url.file://${this.reposDir}/.insteadOf`,
@@ -262,15 +270,15 @@ export class Controller {
 
     async dispose(): Promise<void> {
         await this.kill();
-        // No fixture app may outlive the tests.
-        await this.docker(["__kill-all"]).catch(() => undefined);
+        // Whatever a test left behind. Only the previews with a checkout of this controller, the
+        // daemon may run others.
+        const slugs = await readdir(join(this.dataDir, "checkouts"), { withFileTypes: true }).catch(() => []);
+        for (const entry of slugs.filter((candidate) => candidate.isDirectory())) {
+            await docker(["compose", "-p", `preview-${entry.name}`, "down", "--volumes", "--remove-orphans", "--rmi", "local"]).catch(
+                () => undefined,
+            );
+        }
         await rm(this.rootDir, { recursive: true, force: true });
-    }
-
-    /** Runs the fake docker the controller sees, to change things behind its back. */
-    async docker(args: string[]): Promise<string> {
-        const { stdout } = await execFileAsync(join(supportDir, "bin", "docker"), args, { env: this.env });
-        return stdout;
     }
 
     client(): Client {

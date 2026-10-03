@@ -10,7 +10,7 @@ async function expectStatus(page: Page, status: string): Promise<void> {
     await expect(async () => {
         await page.reload();
         await expect(page.locator(".facts .badge")).toHaveText(status, { timeout: 500 });
-    }).toPass({ timeout: 20_000 });
+    }).toPass({ timeout: 90_000 });
 }
 
 test.describe("status and detail page", () => {
@@ -79,7 +79,7 @@ test.describe("status and detail page", () => {
 
         // The starting page reloads itself until the preview is back.
         await page.goto(controller.previewUrl(slug));
-        await expect(page.locator("body")).toContainText('"version":"v1"', { timeout: 20_000 });
+        await expect(page.locator("body")).toContainText('"version":"v1"', { timeout: 90_000 });
     });
 
     test("the start button brings a stopped preview back up", async ({ page, controller, api, repository, branch, slug }) => {

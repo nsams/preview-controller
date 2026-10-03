@@ -245,21 +245,24 @@ works from the labels of the containers, so the controller never needs the compo
 
 ## Tests
 
-The end-to-end tests start the real controller and drive it through http and a browser:
+The end-to-end tests start the real controller and drive it through http and a browser, against
+the docker daemon of the machine:
 
 ```bash
 npx playwright install chromium   # once
 npm run test:e2e
 ```
 
-They need neither docker nor GitHub. [e2e/support/fake-docker.ts](e2e/support/fake-docker.ts) is put
-on the `PATH` of the controller as `docker` and knows exactly the commands the controller uses; its
-"containers" are local processes. Clones of `https://github.com/<org>/<repo>.git` are rewritten to
-bare repositories on disk, which start out as [e2e/fixture-project](e2e/fixture-project) - a
-`start-preview.sh` that reports its urls and an app that answers every request with what it
-received. Every test worker runs its own controller with its own data directory, every test its
-own branch. A chromium that is already installed elsewhere can be used with
+Previews are built from [e2e/fixture-project](e2e/fixture-project) - a `start-preview.sh`, a
+compose file and an app that answers every request with what it received. Instead of GitHub, clones
+of `https://github.com/<org>/<repo>.git` are pointed at bare repositories on disk with a git
+`insteadOf` rewrite in the environment of the controller. Every test worker runs its own controller
+with its own data directory, every test its own branch, and every test deletes its previews again.
+The controllers only ever remove previews they have a checkout of, so a controller running on the
+same daemon for real is left alone. A chromium that is installed elsewhere can be used with
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+They run in GitHub Actions on every push, see [.github/workflows/e2e.yml](.github/workflows/e2e.yml).
 
 Not covered: the idle and cleanup sweeps, which run once a minute and are measured in minutes
 and days.

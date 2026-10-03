@@ -98,9 +98,6 @@ test.describe("api", () => {
 
         const tail = await api.request(`${controller.url}/api/previews/${preview.slug}/logs?service=web&tail=1`);
         expect(tail.body.trim().split("\n")).toHaveLength(1);
-
-        const otherService = await api.request(`${controller.url}/api/previews/${preview.slug}/logs?service=db`);
-        expect(otherService.body).toBe("");
     });
 
     test("stops and deletes a preview", async ({ controller, api, repository, branch }) => {

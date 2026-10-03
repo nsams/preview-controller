@@ -1,6 +1,6 @@
 #!/bin/sh
-# Start script of the project the end-to-end tests preview. It does what a real one does, only
-# against the fake docker of the tests: report the urls and leave a compose project behind.
+# Start script of the project the end-to-end tests preview. It does what a real one does: report
+# the urls, then build and start a compose project that publishes the given port.
 set -eu
 
 echo "building $(cat version.txt)"
@@ -12,4 +12,4 @@ Admin=$PREVIEW_SCHEME://admin--$PREVIEW_HOST
 Ignored=javascript:alert(1)
 URLS
 
-docker compose up -d
+docker compose up --detach --build --wait --wait-timeout 60

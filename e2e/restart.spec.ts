@@ -11,7 +11,7 @@ test.describe("restarting", () => {
         await expect(page).toHaveURL(`${controller.url}/previews/${slug}`);
 
         // The status turns back to running a moment before the new commit is read in.
-        await expect.poll(async () => (await getPreview(api, controller, slug))?.commit, { timeout: 20_000 }).toBe(commit);
+        await expect.poll(async () => (await getPreview(api, controller, slug))?.commit, { timeout: 90_000 }).toBe(commit);
         const preview = await waitForStatus(api, controller, slug, "running");
         expect(JSON.parse((await api.request(preview.url)).body)).toMatchObject({ version: "v2" });
 

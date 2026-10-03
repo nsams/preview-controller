@@ -17,6 +17,8 @@ type TestFixtures = {
     branch: string;
     /** The slug the controller gives `branch` of `repository`. */
     slug: string;
+    /** Deletes the previews of a test right after it, see below. */
+    cleanup: void;
 };
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -42,6 +44,23 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     slug: async ({ repository, branch }, use) => {
         await use(createSlug({ org: repository.org, repo: repository.repo, branch }));
     },
+    // Every preview has a network of its own, and docker runs out of address pools for networks
+    // after about 30. Only the previews of this controller are touched, which are the ones it knows
+    // the repository of - the others on the daemon have no checkout here.
+    cleanup: [
+        async ({ controller }, use) => {
+            await use();
+            const api = controller.client();
+            await api.login();
+            const response = await api.request(`${controller.url}/api/previews`);
+            for (const preview of JSON.parse(response.body) as PreviewJson[]) {
+                if (preview.ref) {
+                    await api.request(`${controller.url}/api/previews/${preview.slug}`, { method: "DELETE" });
+                }
+            }
+        },
+        { auto: true },
+    ],
     // Browsers resolve *.localhost on their own, so the page talks to the controller directly.
     // Signing in through the form is tested separately, every other test starts signed in.
     page: async ({ page, api, controller }, use) => {
@@ -63,7 +82,7 @@ export async function getPreview(api: Client, controller: Controller, slug: stri
 
 export async function waitForStatus(api: Client, controller: Controller, slug: string, status: PreviewJson["status"]): Promise<PreviewJson> {
     await expect
-        .poll(async () => (await getPreview(api, controller, slug))?.status, { message: `${slug} should become ${status}`, timeout: 20_000 })
+        .poll(async () => (await getPreview(api, controller, slug))?.status, { message: `${slug} should become ${status}`, timeout: 90_000 })
         .toBe(status);
     return (await getPreview(api, controller, slug))!;
 }

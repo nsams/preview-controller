@@ -1,4 +1,4 @@
-import { baseDomain } from "./support/environment.ts";
+import { baseDomain, docker } from "./support/environment.ts";
 import { expect, startPreview, test } from "./support/fixtures.ts";
 
 type Echo = {
@@ -68,7 +68,7 @@ test.describe("proxy", () => {
         const preview = await startPreview(api, controller, repository, branch);
 
         // Stopping behind the back of the controller, which only notices on its next refresh.
-        await controller.docker(["compose", "-p", `preview-${preview.slug}`, "stop"]);
+        await docker(["compose", "-p", `preview-${preview.slug}`, "stop"]);
 
         const response = await api.request(preview.url);
         expect(response.status).toBe(502);

@@ -10,10 +10,14 @@ createServer((request, response) => {
     request.setEncoding("utf8");
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
+        if (request.url === "/__health") {
+            response.end("ok");
+            return;
+        }
         console.log(`${request.method} ${request.headers.host}${request.url}`);
         response.writeHead(200, { "content-type": "application/json", "set-cookie": "fixture_app=1; Path=/" });
         response.end(JSON.stringify({ version, method: request.method, url: request.url, headers: request.headers, body }));
     });
-}).listen(Number(process.env.PORT), "127.0.0.1", () => {
+}).listen(Number(process.env.PORT), () => {
     console.log(`fixture app ${version} listening on ${process.env.PORT}`);
 });

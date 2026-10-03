@@ -7,12 +7,12 @@ echo "boom: dependency not found" >&2
 exit 1
 `;
 
-const crashingWorker = JSON.stringify({
-    services: {
-        web: { command: ["node", "server.mjs"], environment: { PORT: "${PREVIEW_PORT}" }, port: "${PREVIEW_PORT}" },
-        worker: { command: ["node", "-e", "console.error('worker crashed'); process.exit(3)"] },
-    },
-});
+// Up long enough for `compose up --wait` to see it running, then gone for good.
+const crashingWorker = `${await fixtureFile("compose.yml")}
+    worker:
+        build: .
+        command: ["node", "-e", "setTimeout(() => { console.error('worker crashed'); process.exit(3); }, 3000)"]
+`;
 
 test.describe("failures", () => {
     test("a failing start script marks the preview as failed", async ({ page, controller, api, repository, branch, slug }) => {
@@ -75,12 +75,17 @@ exec ./start-preview.real.sh
     });
 
     test("a crashing service is called out on the logs page", async ({ page, controller, api, repository, branch, slug }) => {
-        await repository.push(branch, { "compose.json": crashingWorker });
+        await repository.push(branch, { "compose.yml": crashingWorker });
         await api.request(`${controller.url}/api/previews/start?org=acme&repo=demo&branch=${branch}`);
         // The preview as a whole is running, only one of its services is not.
         await waitForStatus(api, controller, slug, "running");
 
         await page.goto(`${controller.url}/previews/${slug}/logs`);
+        // The logs page reloads itself only once a container failed.
+        await expect(async () => {
+            await page.reload();
+            await expect(page.locator(".filters a.chip-failed")).toBeVisible({ timeout: 500 });
+        }).toPass({ timeout: 30_000 });
         await expect(page.locator(".card > .error")).toContainText("One container is not running: worker (exited (3)).");
         await expect(page.locator(".filters a.chip-failed")).toHaveText("workerexited (3)");
         await expect(page.locator(".filters a.chip-running")).toHaveText("web");
