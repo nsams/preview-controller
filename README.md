@@ -49,6 +49,7 @@ a page that reloads itself until the preview is up, with a link to its log.
 | Method   | Path                                        | Description                                 |
 | -------- | ------------------------------------------- | ------------------------------------------- |
 | `GET`    | `/`                                         | Start form and a table with cpu and memory  |
+| `GET`    | `/app/`                                     | The react frontend, see below               |
 | `POST`   | `/previews/start`                           | What the start form submits                 |
 | `GET`    | `/previews/:slug`                           | Detail page with the links of one preview   |
 | `POST`   | `/previews/:slug/start`                     | What the start button submits               |
@@ -69,6 +70,24 @@ once and reuse the cookie:
 curl -c cookies.txt -d "password=$PREVIEW_PASSWORD" http://preview.localhost:9000/__preview-controller/login
 curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-planet&repo=dextinity-starter&branch=main"
 ```
+
+## Frontend
+
+Next to the server rendered pages there is a react frontend in [frontend/](frontend), built with
+vite and served by the controller under `/app/`, behind the same password. So far it is the base
+to build on: it lists the previews from `/api/previews` and links to the server rendered pages for
+everything else.
+
+```bash
+npm run build          # writes frontend/dist, which npm start then serves under /app/
+npm run dev:frontend   # vite with hot reloading, next to npm run dev
+```
+
+Open the dev server as `http://preview.localhost:5173/app/` - with the base domain, not
+`localhost`. The session cookie is set on the base domain and cookies ignore the port, so the dev
+server shares the session of the controller, and vite passes `/api` and the login on to the
+controller with the host header unchanged, which is how the controller knows they are meant for
+itself and not for a preview.
 
 ## Logs
 

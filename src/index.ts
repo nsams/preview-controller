@@ -1,6 +1,8 @@
 import { serve } from "@hono/node-server";
 import type { HttpBindings } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
+import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
 
@@ -317,6 +319,18 @@ app.delete("/api/previews/:slug", async (c) => {
     } catch (error) {
         return c.json({ error: describeError(error) }, error instanceof PreviewError ? 404 : 500);
     }
+});
+
+/** Where `npm run build` puts the react frontend, relative to the working directory like serveStatic wants it. */
+const frontendDir = "frontend/dist";
+
+// The react frontend, behind the same session as everything else. It is a single page app, so every
+// path below /app/ that is not a built file gets its index.html.
+app.get("/app", (c) => c.redirect("/app/"));
+app.use("/app/*", serveStatic({ root: frontendDir, rewriteRequestPath: (path) => path.slice("/app".length) }));
+app.get("/app/*", async (c) => {
+    const index = await readFile(`${frontendDir}/index.html`, "utf8").catch(() => undefined);
+    return index ? c.html(index) : c.text("The frontend has not been built, run npm run build.", 404);
 });
 
 const idleSweep = setInterval(async () => {
