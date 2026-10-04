@@ -81,6 +81,11 @@ routing. The only pages still rendered by the controller itself are the ones a p
 in place of the preview - starting, failed, unknown - and the login, because all of them have to
 work on every host.
 
+The api lives in [src/api.ts](src/api.ts) as one chained hono app. The frontend imports only its
+type and talks to it through hono's typed client (`hc<ApiType>`), so paths, parameters and response
+shapes are checked by `npm run lint` on both sides - there are no hand-written copies of the api
+types. A route only shows up in that type when it is chained onto the others.
+
 ```bash
 npm run build          # writes frontend/dist, which npm start serves
 npm run dev:frontend   # vite with hot reloading, next to npm run dev

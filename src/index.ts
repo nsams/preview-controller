@@ -4,14 +4,13 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
-import type { Context } from "hono";
 
+import { createApi } from "./api.ts";
 import { createSessionCookie, isPasswordCorrect, isSessionValid, safeRedirectTarget } from "./auth.ts";
 import { loadConfig } from "./config.ts";
-import { readUsageByComposeProject, type ContainerUsage } from "./docker.ts";
-import { describeError, registerSecret } from "./exec.ts";
+import { registerSecret } from "./exec.ts";
 import { failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
-import { PreviewError, PreviewRegistry, type Preview } from "./previews.ts";
+import { PreviewRegistry } from "./previews.ts";
 import { proxyToPreview } from "./proxy.ts";
 
 const config = loadConfig();
@@ -100,153 +99,7 @@ app.use("*", async (c, next) => {
     return c.html(startingPage(preview, controllerUrl), 503);
 });
 
-/** A preview as the api answers it, with the url it should be opened at. */
-function toJson(preview: Preview) {
-    return { ...preview, url: registry.primaryUrlOf(preview) };
-}
-
-function errorResponse(c: Context, error: unknown) {
-    return c.json({ error: describeError(error) }, error instanceof PreviewError ? 404 : 500);
-}
-
-app.get("/api/previews", (c) => {
-    return c.json(registry.list().map(toJson));
-});
-
-/** What the start form of the frontend submits. */
-app.post("/api/previews", async (c) => {
-    const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
-    const field = (name: string) => (typeof body[name] === "string" ? body[name].trim() : "");
-    try {
-        const preview = await registry.request({ org: field("org"), repo: field("repo"), branch: field("branch") });
-        return c.json(toJson(preview));
-    } catch (error) {
-        if (error instanceof PreviewError) {
-            return c.json({ error: error.message }, 400);
-        }
-        throw error;
-    }
-});
-
-// For scripts, which is why it is a get. Registered before /api/previews/:slug, which it would
-// otherwise be taken for.
-app.get("/api/previews/start", async (c) => {
-    const org = c.req.query("org");
-    const repo = c.req.query("repo");
-    const branch = c.req.query("branch");
-    if (!org || !repo || !branch) {
-        return c.json({ error: "org, repo and branch are required" }, 400);
-    }
-    try {
-        const preview = await registry.request({ org, repo, branch });
-        return c.json(toJson(preview));
-    } catch (error) {
-        if (error instanceof PreviewError) {
-            return c.json({ error: error.message }, 400);
-        }
-        throw error;
-    }
-});
-
-/** Cpu and memory of every running preview by slug. Separate, because docker stats takes a moment. */
-app.get("/api/usage", async (c) => {
-    try {
-        const byProject = await readUsageByComposeProject();
-        const bySlug: Record<string, ContainerUsage> = {};
-        for (const preview of registry.list()) {
-            const usage = byProject.get(registry.composeProject(preview));
-            if (usage) {
-                bySlug[preview.slug] = usage;
-            }
-        }
-        return c.json(bySlug);
-    } catch (error) {
-        return c.json({ error: `Could not read container usage: ${describeError(error)}` }, 500);
-    }
-});
-
-app.get("/api/previews/:slug", (c) => {
-    const preview = registry.get(c.req.param("slug"));
-    if (!preview) {
-        return c.json({ error: `Unknown preview "${c.req.param("slug")}"` }, 404);
-    }
-    return c.json({
-        ...toJson(preview),
-        // A project that has not reported any urls yet is still reachable on its own host.
-        links: preview.urls.length > 0 ? preview.urls : [{ name: "Preview", url: registry.urlOf(preview) }],
-        // Whether the container logs start at the last start, which is what the logs page has to say.
-        containerLogsSinceLastStart: registry.secondsSinceStartAttempt(preview.slug) !== undefined,
-    });
-});
-
-/**
- * Starting a stopped preview and restarting a running one are the same operation: fetch the
- * branch, rebuild and bring the project up - which is why a restart is also how a preview picks
- * up new commits. It runs in the background, so the answer comes right away and the detail page
- * shows how far it got. A failed preview is never picked up again on its own, so this is the way
- * out of it.
- */
-function bringUp(c: Context<Env, "/api/previews/:slug/*">, { shouldRestart }: { shouldRestart: boolean }) {
-    const preview = registry.get(c.req.param("slug"));
-    if (!preview) {
-        return c.json({ error: `Unknown preview "${c.req.param("slug")}"` }, 404);
-    }
-    registry.resumeInBackground(preview, { shouldRestart });
-    return c.json({ ok: true });
-}
-
-app.post("/api/previews/:slug/start", (c) => bringUp(c, { shouldRestart: false }));
-app.post("/api/previews/:slug/restart", (c) => bringUp(c, { shouldRestart: true }));
-
-app.post("/api/previews/:slug/stop", async (c) => {
-    try {
-        await registry.stop(c.req.param("slug"));
-        return c.json({ ok: true });
-    } catch (error) {
-        return errorResponse(c, error);
-    }
-});
-
-app.delete("/api/previews/:slug", async (c) => {
-    try {
-        await registry.remove(c.req.param("slug"));
-        return c.json({ ok: true });
-    } catch (error) {
-        return errorResponse(c, error);
-    }
-});
-
-app.get("/api/previews/:slug/services", async (c) => {
-    const slug = c.req.param("slug");
-    if (!registry.get(slug)) {
-        return c.json({ error: `Unknown preview "${slug}"` }, 404);
-    }
-    return c.json(await registry.listServices(slug).catch(() => []));
-});
-
-const servicePattern = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/;
-
-app.get("/api/previews/:slug/logs", async (c) => {
-    const slug = c.req.param("slug");
-    if (!registry.get(slug)) {
-        return c.json({ error: `Unknown preview "${slug}"` }, 404);
-    }
-    const service = c.req.query("service");
-    const tail = Number(c.req.query("tail") ?? 200);
-    const options = {
-        tail: Number.isInteger(tail) && tail > 0 && tail <= 5000 ? tail : 200,
-        service: service && servicePattern.test(service) ? service : undefined,
-    };
-    const source = c.req.query("source") ?? "containers";
-    try {
-        const body = source === "start" ? await registry.readStartLog(slug) : await registry.readContainerLogs(slug, options);
-        return c.text(body);
-    } catch (error) {
-        return c.json({ error: describeError(error) }, 500);
-    }
-});
-
-app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
+app.route("/api", createApi(registry));
 
 /** Where `npm run build` puts the frontend, relative to the working directory like serveStatic wants it. */
 const frontendDir = "frontend/dist";
