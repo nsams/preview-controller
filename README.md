@@ -245,27 +245,22 @@ works from the labels of the containers, so the controller never needs the compo
 
 ## Tests
 
-The end-to-end tests start the real controller and drive it through http and a browser, against
-the docker daemon of the machine:
-
 ```bash
+npm test                          # unit tests, src/*.test.ts
 npx playwright install chromium   # once
-npm run test:e2e
+npm run test:e2e                  # end-to-end tests, e2e/*.spec.ts
 ```
 
-Previews are built from [e2e/fixture-project](e2e/fixture-project) - a `start-preview.sh`, a
-compose file and an app that answers every request with what it received. Instead of GitHub, clones
-of `https://github.com/<org>/<repo>.git` are pointed at bare repositories on disk with a git
-`insteadOf` rewrite in the environment of the controller. Every test worker runs its own controller
-with its own data directory, every test its own branch, and every test deletes its previews again.
-The controllers only ever remove previews they have a checkout of, so a controller running on the
-same daemon for real is left alone. A chromium that is installed elsewhere can be used with
-`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+The unit tests use the test runner of node and need nothing else.
 
-They run in GitHub Actions on every push, see [.github/workflows/e2e.yml](.github/workflows/e2e.yml).
+The end-to-end tests start the real controller and drive it through http and a browser, so they
+need docker. They preview [e2e/fixture-project](e2e/fixture-project), a `start-preview.sh` with a
+compose file and an app that answers every request with what it received. Instead of GitHub, it is
+cloned from a bare repository on disk, through a git `insteadOf` rewrite in the environment of the
+controller. Every test pushes a branch of its own and deletes its previews afterwards. A chromium
+that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
-Not covered: the idle and cleanup sweeps, which run once a minute and are measured in minutes
-and days.
+Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.github/workflows/test.yml).
 
 ## Limitations
 

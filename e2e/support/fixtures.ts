@@ -3,95 +3,59 @@ import { randomBytes } from "node:crypto";
 import { test as base, expect } from "@playwright/test";
 
 import { createSlug } from "../../src/repository.ts";
-import { baseDomain, Controller, type Client, type FixtureRepository, type PreviewJson } from "./environment.ts";
+import { baseDomain, Client, Controller, type Preview } from "./environment.ts";
 
-type WorkerFixtures = {
-    controller: Controller;
-    repository: FixtureRepository;
-};
+export { expect };
 
-type TestFixtures = {
-    /** A client that is signed in already. */
-    api: Client;
-    /** A branch of its own for every test, so that tests sharing a controller do not see each other. */
-    branch: string;
-    /** The slug the controller gives `branch` of `repository`. */
-    slug: string;
-    /** Deletes the previews of a test right after it, see below. */
-    cleanup: void;
-};
-
-export const test = base.extend<TestFixtures, WorkerFixtures>({
+export const test = base.extend<{ api: Client; branch: string; slug: string }, { controller: Controller }>({
     controller: [
-        async ({}, use, workerInfo) => {
-            const controller = await Controller.start(workerInfo.workerIndex);
+        async ({}, use) => {
+            const controller = await Controller.start();
             await use(controller);
             await controller.dispose();
         },
         { scope: "worker" },
     ],
-    repository: [async ({ controller }, use) => use(await controller.createRepository("acme", "demo")), { scope: "worker" }],
-    api: async ({ controller }, use) => {
-        const client = controller.client();
-        await client.login();
-        await use(client);
+    api: async ({ controller: _ }, use) => {
+        const api = new Client();
+        await api.login();
+        await use(api);
     },
-    branch: async ({}, use, testInfo) => {
-        const title = testInfo.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-        // Random rather than derived from the test, because --repeat-each runs the same test on the same controller again.
-        await use(`${title.slice(0, 24).replace(/-+$/, "")}-${randomBytes(3).toString("hex")}`);
-    },
-    slug: async ({ repository, branch }, use) => {
-        await use(createSlug({ org: repository.org, repo: repository.repo, branch }));
-    },
-    // Every preview has a network of its own, and docker runs out of address pools for networks
-    // after about 30. Only the previews of this controller are touched, which are the ones it knows
-    // the repository of - the others on the daemon have no checkout here.
-    cleanup: [
-        async ({ controller }, use) => {
-            await use();
-            const api = controller.client();
-            await api.login();
-            const response = await api.request(`${controller.url}/api/previews`);
-            for (const preview of JSON.parse(response.body) as PreviewJson[]) {
-                if (preview.ref) {
-                    await api.request(`${controller.url}/api/previews/${preview.slug}`, { method: "DELETE" });
-                }
+    // A branch of its own for every test. Its previews are deleted afterwards, because every
+    // preview has a docker network of its own and docker runs out of them after about 30.
+    branch: async ({ api }, use, testInfo) => {
+        const branch = `${testInfo.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .slice(0, 24)}-${randomBytes(3).toString("hex")}`;
+        await use(branch);
+        for (const preview of await api.previews()) {
+            if (preview.ref?.branch === branch) {
+                await api.request(`/api/previews/${preview.slug}`, { method: "DELETE" });
             }
-        },
-        { auto: true },
-    ],
-    // Browsers resolve *.localhost on their own, so the page talks to the controller directly.
-    // Signing in through the form is tested separately, every other test starts signed in.
-    page: async ({ page, api, controller }, use) => {
-        const [name, value] = (api.cookie ?? "").split("=");
-        // The leading dot makes it a domain cookie, like the one the controller sets.
+        }
+    },
+    slug: async ({ branch }, use) => {
+        await use(createSlug({ org: "acme", repo: "demo", branch }));
+    },
+    // Browsers resolve *.localhost on their own. Every page starts signed in on the status page.
+    page: async ({ page, api }, use) => {
+        const [name, value] = api.cookie!.split("=");
         await page.context().addCookies([{ name, value, domain: `.${baseDomain}`, path: "/" }]);
-        await page.goto(controller.url);
+        await page.goto("/");
         await use(page);
     },
 });
 
-export { expect };
-
-export async function getPreview(api: Client, controller: Controller, slug: string): Promise<PreviewJson | undefined> {
-    const response = await api.request(`${controller.url}/api/previews`);
-    expect(response.status).toBe(200);
-    return (JSON.parse(response.body) as PreviewJson[]).find((preview) => preview.slug === slug);
+export async function waitFor(api: Client, slug: string, status: Preview["status"]): Promise<Preview> {
+    await expect.poll(async () => (await api.preview(slug))?.status, { message: `${slug} should be ${status}`, timeout: 90_000 }).toBe(status);
+    return (await api.preview(slug))!;
 }
 
-export async function waitForStatus(api: Client, controller: Controller, slug: string, status: PreviewJson["status"]): Promise<PreviewJson> {
-    await expect
-        .poll(async () => (await getPreview(api, controller, slug))?.status, { message: `${slug} should become ${status}`, timeout: 90_000 })
-        .toBe(status);
-    return (await getPreview(api, controller, slug))!;
-}
-
-/** Starts a preview of the given branch through the api and waits until it runs. */
-export async function startPreview(api: Client, controller: Controller, repository: FixtureRepository, branch: string): Promise<PreviewJson> {
-    const query = new URLSearchParams({ org: repository.org, repo: repository.repo, branch });
-    const response = await api.request(`${controller.url}/api/previews/start?${query.toString()}`);
+/** Starts a preview of the branch through the api, pushing the branch first. */
+export async function startPreview(api: Client, controller: Controller, branch: string, files: Record<string, string> = {}): Promise<string> {
+    await controller.repository.push(branch, files);
+    const response = await api.request(`/api/previews/start?org=acme&repo=demo&branch=${branch}`);
     expect(response.status, response.body).toBe(200);
-    const { slug } = JSON.parse(response.body) as PreviewJson;
-    return waitForStatus(api, controller, slug, "running");
+    return (JSON.parse(response.body) as Preview).slug;
 }

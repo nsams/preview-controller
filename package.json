@@ -10,6 +10,7 @@
         "lint:prettier": "npx prettier --check .",
         "lint:tsc": "tsc --noEmit",
         "lint:fix": "npx prettier --write .",
+        "test": "node --test 'src/**/*.test.ts'",
         "test:e2e": "playwright test"
     },
     "dependencies": {
