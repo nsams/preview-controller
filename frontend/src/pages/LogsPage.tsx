@@ -1,12 +1,29 @@
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip, { type ChipProps } from "@mui/material/Chip";
+import Paper from "@mui/material/Paper";
+import Skeleton from "@mui/material/Skeleton";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link as RouterLink, useParams, useSearchParams } from "react-router";
 
-import { describeRef, fetchContainerLog, fetchPreview, fetchServices, fetchStartLog, logsPath, previewPath } from "../api.ts";
+import { fetchContainerLog, fetchPreview, fetchServices, fetchStartLog, logsPath, previewPath, type ServiceState } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
+import { LogView } from "../components/LogView.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
 import { usePolling } from "../usePolling.ts";
 
 const tail = 200;
+
+const chipColors: Record<ServiceState["status"], ChipProps["color"]> = {
+    running: "default",
+    starting: "warning",
+    failed: "error",
+    stopped: "default",
+};
 
 export function LogsPage() {
     const slug = useParams().slug ?? "";
@@ -37,14 +54,29 @@ export function LogsPage() {
         }
     }, [data]);
 
+    const header = (
+        <PageHeader
+            title="Logs"
+            trail={[
+                { label: "Previews", href: "/" },
+                { label: slug, href: previewPath(slug) },
+            ]}
+        >
+            {data ? <StatusBadge status={data.preview.status} /> : null}
+        </PageHeader>
+    );
+
     if (!data) {
         return (
             <>
-                <h1>Logs</h1>
-                <p className="lead">
-                    <Link to="/">all previews</Link> &middot; <Link to={previewPath(slug)}>{slug}</Link>
-                </p>
-                {logs.error ? <ErrorMessage error={logs.error} /> : <p>Loading…</p>}
+                {header}
+                {logs.error ? (
+                    <ErrorMessage error={logs.error} />
+                ) : (
+                    <Paper variant="outlined" sx={{ p: 3 }}>
+                        <Skeleton height={200} variant="rounded" />
+                    </Paper>
+                )}
             </>
         );
     }
@@ -56,49 +88,77 @@ export function LogsPage() {
 
     return (
         <>
-            <h1>Logs</h1>
-            <p className="lead">
-                <Link to="/">all previews</Link> &middot; <Link to={previewPath(slug)}>{slug}</Link> &middot; {describeRef(preview)} &middot;{" "}
-                <StatusBadge status={preview.status} />
-            </p>
-            <ErrorMessage error={logs.error} />
-            <div className="card">
-                <h2>Start log</h2>
-                <pre>{startLog.trim() || "The controller has not started this preview yet."}</pre>
-                <h2>
-                    Containers (last {tail} lines{preview.containerLogsSinceLastStart ? " since the last start" : ""})
-                </h2>
-                {failed.length > 0 ? (
-                    <p className="error">
-                        {failed.length === 1 ? "One container is not running" : `${failed.length} containers are not running`}:{" "}
-                        {failed.map(({ name, detail }) => `${name} (${detail})`).join(", ")}.
-                        {service ? "" : " Pick one below to see its output on its own."}
-                    </p>
-                ) : null}
-                <div className="filters">
-                    <Link to={logsPath(slug)} aria-current={service ? undefined : "page"}>
-                        all services
-                    </Link>
-                    {services.map(({ name, status, detail }) => (
-                        <Link
-                            key={name}
-                            to={logsPath(slug, name)}
-                            className={`chip-${status}`}
-                            title={`${name}: ${detail}`}
-                            aria-current={service === name ? "page" : undefined}
-                        >
-                            {name}
-                            {/* A service that is simply running needs no second label - only the others get one. */}
-                            {status === "running" ? null : <span className="chip-state">{detail}</span>}
-                        </Link>
-                    ))}
-                </div>
-                <ErrorMessage error={containerLog.error} />
-                <pre>
-                    {containerLog.text.trim() ||
-                        (preview.containerLogsSinceLastStart ? "No container output since the last start." : "No container output.")}
-                </pre>
-            </div>
+            {header}
+            <Stack spacing={2}>
+                <ErrorMessage error={logs.error} />
+
+                <Paper variant="outlined" sx={{ p: 2.5 }}>
+                    <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                        Start log
+                    </Typography>
+                    <LogView>{startLog.trim() || "The controller has not started this preview yet."}</LogView>
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2.5 }}>
+                    <Stack direction="row" sx={{ alignItems: "baseline", mb: 1.5 }}>
+                        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                            Containers
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                            last {tail} lines{preview.containerLogsSinceLastStart ? " since the last start" : ""}
+                        </Typography>
+                        <Box sx={{ flex: 1 }} />
+                        {isLive ? null : (
+                            <Button size="small" onClick={logs.reload}>
+                                Reload
+                            </Button>
+                        )}
+                    </Stack>
+
+                    {failed.length > 0 ? (
+                        <Alert severity="error" sx={{ mb: 1.5 }}>
+                            {failed.length === 1 ? "One container is not running" : `${failed.length} containers are not running`}:{" "}
+                            {failed.map(({ name, detail }) => `${name} (${detail})`).join(", ")}.
+                            {service ? "" : " Pick one below to see its output on its own."}
+                        </Alert>
+                    ) : null}
+
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.5 }}>
+                        <Chip
+                            label="all services"
+                            component={RouterLink}
+                            to={logsPath(slug)}
+                            clickable
+                            color={service ? "default" : "primary"}
+                            variant={service ? "outlined" : "filled"}
+                        />
+                        {services.map(({ name, status, detail }) => (
+                            <Chip
+                                key={name}
+                                // A service that is simply running needs no second label - only the others get one.
+                                label={status === "running" ? name : `${name} · ${detail}`}
+                                title={`${name}: ${detail}`}
+                                component={RouterLink}
+                                to={logsPath(slug, name)}
+                                clickable
+                                color={service === name && status === "running" ? "primary" : chipColors[status]}
+                                variant={service === name ? "filled" : "outlined"}
+                                data-status={status}
+                            />
+                        ))}
+                    </Stack>
+
+                    {containerLog.error ? (
+                        <Box sx={{ mb: 1.5 }}>
+                            <ErrorMessage error={containerLog.error} />
+                        </Box>
+                    ) : null}
+                    <LogView>
+                        {containerLog.text.trim() ||
+                            (preview.containerLogsSinceLastStart ? "No container output since the last start." : "No container output.")}
+                    </LogView>
+                </Paper>
+            </Stack>
         </>
     );
 }

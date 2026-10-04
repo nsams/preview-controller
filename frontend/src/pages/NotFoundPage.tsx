@@ -1,12 +1,14 @@
-import { Link } from "react-router";
+import Button from "@mui/material/Button";
+
+import { PageHeader } from "../components/PageHeader.tsx";
 
 export function NotFoundPage() {
     return (
         <>
-            <h1>Not found</h1>
-            <p className="lead">
-                <Link to="/">all previews</Link>
-            </p>
+            <PageHeader title="Not found" />
+            <Button href="/" variant="outlined">
+                All previews
+            </Button>
         </>
     );
 }

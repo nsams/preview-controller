@@ -1,7 +1,12 @@
+import Paper from "@mui/material/Paper";
+import Skeleton from "@mui/material/Skeleton";
+import Stack from "@mui/material/Stack";
+
+import { fetchPreviews, fetchUsage, UnauthorizedError, type Preview } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
 import { PreviewsTable } from "../components/PreviewsTable.tsx";
 import { StartForm } from "../components/StartForm.tsx";
-import { fetchPreviews, fetchUsage, UnauthorizedError, type Preview } from "../api.ts";
 import { usePolling } from "../usePolling.ts";
 
 function latestRef(previews: Preview[]): Preview["ref"] {
@@ -24,17 +29,21 @@ export function PreviewsPage() {
 
     return (
         <>
-            <h1>Previews</h1>
-            <p className="lead">Every preview is one branch of one GitHub repository</p>
-            <div className="cards">
+            <PageHeader title="Previews" />
+            <Stack spacing={2}>
                 {/* Mounted once the list is there, so that it can start out with the repository used last. */}
                 {previews.isLoading ? null : <StartForm initial={latestRef(previews.data ?? [])} />}
                 <ErrorMessage error={previews.error} />
                 <ErrorMessage error={usage.error} />
-                <div className="card">
-                    {previews.isLoading ? <p>Loading…</p> : <PreviewsTable previews={previews.data ?? []} usage={usage.data} />}
-                </div>
-            </div>
+                {previews.isLoading ? (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                        <Skeleton height={32} />
+                        <Skeleton height={32} />
+                    </Paper>
+                ) : (
+                    <PreviewsTable previews={previews.data ?? []} usage={usage.data} />
+                )}
+            </Stack>
         </>
     );
 }

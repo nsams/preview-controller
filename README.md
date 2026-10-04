@@ -74,12 +74,12 @@ curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-
 
 ## Frontend
 
-The ui of the controller is a react app in [frontend/](frontend), built with vite. The controller
-serves the build from `frontend/dist` on the base domain, behind the same password, and answers
-every path that is not a file or under `/api` with its `index.html`, so the frontend does the
-routing. The only pages still rendered by the controller itself are the ones a preview host shows
-in place of the preview - starting, failed, unknown - and the login, because all of them have to
-work on every host.
+The ui of the controller is a react app in [frontend/](frontend), built with vite and
+[mui](https://mui.com/material-ui/). The controller serves the build from `frontend/dist` on the
+base domain, behind the same password, and answers every path that is not a file or under `/api`
+with its `index.html`, so the frontend does the routing. The only pages still rendered by the
+controller itself are the ones a preview host shows in place of the preview - starting, failed,
+unknown - and the login, because all of them have to work on every host.
 
 The api lives in [src/api.ts](src/api.ts) as one chained hono app. The frontend imports only its
 type and talks to it through hono's typed client (`hc<ApiType>`), so paths, parameters and response

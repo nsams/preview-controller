@@ -1,3 +1,5 @@
+import Alert from "@mui/material/Alert";
+
 import { UnauthorizedError } from "../api.ts";
 import { LoginForm } from "./LoginForm.tsx";
 
@@ -9,5 +11,9 @@ export function ErrorMessage({ error }: { error: unknown }) {
     if (error instanceof UnauthorizedError) {
         return <LoginForm />;
     }
-    return <p className="error">{error instanceof Error ? error.message : String(error)}</p>;
+    return (
+        <Alert severity="error" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {error instanceof Error ? error.message : String(error)}
+        </Alert>
+    );
 }

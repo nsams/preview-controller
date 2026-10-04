@@ -18,6 +18,8 @@ export default defineConfig(({ mode }) => {
         build: {
             outDir: "dist",
             emptyOutDir: true,
+            // Mostly mui. An internal tool on a fast connection, so one chunk is fine.
+            chunkSizeWarningLimit: 800,
         },
         server: {
             // Opened as http://<base domain>:5173/ - the session cookie is set on the base

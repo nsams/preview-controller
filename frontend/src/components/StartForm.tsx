@@ -1,3 +1,10 @@
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 
@@ -33,30 +40,36 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
     };
 
     return (
-        <div className="card">
-            <h2>Start a preview</h2>
-            <ErrorMessage error={error} />
-            <form className="start-form" onSubmit={submit}>
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+            <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 2 }}>
+                Start a preview
+            </Typography>
+            {error ? (
+                <Box sx={{ mb: 2 }}>
+                    <ErrorMessage error={error} />
+                </Box>
+            ) : null}
+            <Stack component="form" onSubmit={submit} direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "flex-start" } }}>
                 {fields.map(({ name, label, placeholder }) => (
-                    <label key={name}>
-                        {label}
-                        <input
-                            name={name}
-                            value={values[name]}
-                            placeholder={placeholder}
-                            onChange={(event) => setValues({ ...values, [name]: event.target.value })}
-                            required
-                            spellCheck={false}
-                            autoCapitalize="off"
-                            autoComplete="off"
-                            autoFocus={name === "branch"}
-                        />
-                    </label>
+                    <TextField
+                        key={name}
+                        name={name}
+                        label={label}
+                        placeholder={placeholder}
+                        value={values[name]}
+                        onChange={(event) => setValues({ ...values, [name]: event.target.value })}
+                        required
+                        size="small"
+                        autoFocus={name === "branch"}
+                        autoComplete="off"
+                        slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: "off" } }}
+                        sx={{ flex: name === "branch" ? 1.2 : 1 }}
+                    />
                 ))}
-                <button type="submit" disabled={isSubmitting}>
+                <Button type="submit" variant="contained" startIcon={<PlayArrowIcon />} loading={isSubmitting} sx={{ height: 40 }}>
                     Start
-                </button>
-            </form>
-        </div>
+                </Button>
+            </Stack>
+        </Paper>
     );
 }
