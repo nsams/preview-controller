@@ -8,21 +8,10 @@ import type { Context } from "hono";
 
 import { createSessionCookie, isPasswordCorrect, isSessionValid, safeRedirectTarget } from "./auth.ts";
 import { loadConfig } from "./config.ts";
-import { readUsageByComposeProject } from "./docker.ts";
+import { readUsageByComposeProject, type ContainerUsage } from "./docker.ts";
 import { describeError, registerSecret } from "./exec.ts";
-import {
-    failedPage,
-    loginPage,
-    logsPage,
-    previewPage,
-    previewPath,
-    startingPage,
-    statusPage,
-    unknownHostPage,
-    type StatusPageData,
-    type StatusRow,
-} from "./pages.ts";
-import { PreviewError, PreviewRegistry } from "./previews.ts";
+import { failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
+import { PreviewError, PreviewRegistry, type Preview } from "./previews.ts";
 import { proxyToPreview } from "./proxy.ts";
 
 const config = loadConfig();
@@ -111,180 +100,36 @@ app.use("*", async (c, next) => {
     return c.html(startingPage(preview, controllerUrl), 503);
 });
 
-async function buildStatusPage(data: Pick<StatusPageData, "form" | "formError"> = {}): Promise<string> {
-    const previews = registry.list();
-    const rows: StatusRow[] = previews.map((preview) => ({ preview }));
-    let usageError: string | undefined;
-    try {
-        const usage = await readUsageByComposeProject();
-        for (const row of rows) {
-            row.usage = usage.get(registry.composeProject(row.preview));
-        }
-    } catch (error) {
-        usageError = `Could not read container usage: ${describeError(error)}`;
-    }
-
-    // Prefill with the repository that was used last, because the branch is usually the only
-    // thing that changes between two previews.
-    const latest = previews.reduce<(typeof previews)[number] | undefined>(
-        (newest, preview) => (preview.ref && (!newest || (preview.createdAt ?? 0) > (newest.createdAt ?? 0)) ? preview : newest),
-        undefined,
-    );
-    const form = data.form ?? (latest?.ref ? { org: latest.ref.org, repo: latest.ref.repo } : undefined);
-
-    return statusPage({ rows, form, formError: data.formError, usageError });
+/** A preview as the api answers it, with the url it should be opened at. */
+function toJson(preview: Preview) {
+    return { ...preview, url: registry.primaryUrlOf(preview) };
 }
 
-app.get("/", async (c) => {
-    return c.html(await buildStatusPage());
+function errorResponse(c: Context, error: unknown) {
+    return c.json({ error: describeError(error) }, error instanceof PreviewError ? 404 : 500);
+}
+
+app.get("/api/previews", (c) => {
+    return c.json(registry.list().map(toJson));
 });
 
-app.post("/previews/start", async (c) => {
-    const body = await c.req.parseBody();
-    const form = {
-        org: typeof body.org === "string" ? body.org.trim() : "",
-        repo: typeof body.repo === "string" ? body.repo.trim() : "",
-        branch: typeof body.branch === "string" ? body.branch.trim() : "",
-    };
+/** What the start form of the frontend submits. */
+app.post("/api/previews", async (c) => {
+    const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+    const field = (name: string) => (typeof body[name] === "string" ? body[name].trim() : "");
     try {
-        const preview = await registry.request(form);
-        return c.redirect(previewPath(preview.slug), 303);
+        const preview = await registry.request({ org: field("org"), repo: field("repo"), branch: field("branch") });
+        return c.json(toJson(preview));
     } catch (error) {
         if (error instanceof PreviewError) {
-            return c.html(await buildStatusPage({ form, formError: error.message }), 400);
+            return c.json({ error: error.message }, 400);
         }
         throw error;
     }
 });
 
-const servicePattern = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/;
-
-function logQuery(c: { req: { query: (key: string) => string | undefined } }): { tail: number; service?: string } {
-    const service = c.req.query("service");
-    const tail = Number(c.req.query("tail") ?? 200);
-    return {
-        tail: Number.isInteger(tail) && tail > 0 && tail <= 5000 ? tail : 200,
-        service: service && servicePattern.test(service) ? service : undefined,
-    };
-}
-
-async function buildPreviewPage(slug: string, actionError?: string): Promise<string | undefined> {
-    const preview = registry.get(slug);
-    if (!preview) {
-        return undefined;
-    }
-    const usage = await readUsageByComposeProject()
-        .then((byProject) => byProject.get(registry.composeProject(preview)))
-        .catch(() => undefined);
-
-    return previewPage({ preview, fallbackUrl: registry.urlOf(preview), usage, actionError });
-}
-
-/** Where an action form wants to go afterwards, ignoring anything that does not stay local. */
-async function redirectTargetOf(c: Context): Promise<string> {
-    const body = await c.req.parseBody();
-    return safeRedirectTarget(typeof body.redirectTo === "string" ? body.redirectTo : undefined);
-}
-
-/**
- * Starting a stopped preview and restarting a running one are the same operation: fetch the
- * branch, rebuild and bring the project up - which is why a restart is also how a preview picks
- * up new commits. It runs in the background, so the answer comes right away and the detail page
- * shows how far it got.
- */
-async function bringUp(c: Context<Env, "/previews/:slug">, { shouldRestart }: { shouldRestart: boolean }): Promise<Response> {
-    const slug = c.req.param("slug");
-    const redirectTo = await redirectTargetOf(c);
-    const preview = registry.get(slug);
-    if (!preview) {
-        return c.html(unknownHostPage(slug), 404);
-    }
-    registry.resumeInBackground(preview, { shouldRestart });
-    return c.redirect(redirectTo, 303);
-}
-
-app.post("/previews/:slug/start", (c) => bringUp(c, { shouldRestart: false }));
-app.post("/previews/:slug/restart", (c) => bringUp(c, { shouldRestart: true }));
-
-app.post("/previews/:slug/stop", async (c) => {
-    const slug = c.req.param("slug");
-    const redirectTo = await redirectTargetOf(c);
-    try {
-        await registry.stop(slug);
-        return c.redirect(redirectTo, 303);
-    } catch (error) {
-        const page = await buildPreviewPage(slug, describeError(error));
-        return page ? c.html(page, 500) : c.html(unknownHostPage(slug), 404);
-    }
-});
-
-// Deleting is offered on the detail page of a stopped preview. Everything it removes - containers,
-// volumes, checkout - is rebuilt by the next start, so a running preview has to be stopped first.
-app.post("/previews/:slug/delete", async (c) => {
-    const slug = c.req.param("slug");
-    const redirectTo = await redirectTargetOf(c);
-    const preview = registry.get(slug);
-    if (!preview) {
-        return c.html(unknownHostPage(slug), 404);
-    }
-    if (preview.status !== "stopped") {
-        const page = await buildPreviewPage(slug, `Only a stopped preview can be deleted, ${slug} is ${preview.status}.`);
-        return page ? c.html(page, 409) : c.html(unknownHostPage(slug), 404);
-    }
-    try {
-        await registry.remove(slug);
-        return c.redirect(redirectTo, 303);
-    } catch (error) {
-        const page = await buildPreviewPage(slug, describeError(error));
-        return page ? c.html(page, 500) : c.html(unknownHostPage(slug), 404);
-    }
-});
-
-app.get("/previews/:slug", async (c) => {
-    const page = await buildPreviewPage(c.req.param("slug"));
-    return page ? c.html(page) : c.html(unknownHostPage(c.req.param("slug")), 404);
-});
-
-app.get("/previews/:slug/logs", async (c) => {
-    const slug = c.req.param("slug");
-    const preview = registry.get(slug);
-    if (!preview) {
-        return c.html(unknownHostPage(slug), 404);
-    }
-    const { tail, service } = logQuery(c);
-
-    const [startLog, services] = await Promise.all([registry.readStartLog(slug), registry.listServices(slug).catch(() => [])]);
-    let containerLog = "";
-    let containerLogError: string | undefined;
-    try {
-        containerLog = await registry.readContainerLogs(slug, { tail, service });
-    } catch (error) {
-        containerLogError = describeError(error);
-    }
-
-    const sinceLastStart = registry.secondsSinceStartAttempt(slug) !== undefined;
-    return c.html(logsPage({ preview, startLog, containerLog, containerLogError, services, service, tail, sinceLastStart }));
-});
-
-app.get("/api/previews/:slug/logs", async (c) => {
-    const slug = c.req.param("slug");
-    if (!registry.get(slug)) {
-        return c.json({ error: `Unknown preview "${slug}"` }, 404);
-    }
-    const { tail, service } = logQuery(c);
-    const source = c.req.query("source") ?? "containers";
-    try {
-        const body = source === "start" ? await registry.readStartLog(slug) : await registry.readContainerLogs(slug, { tail, service });
-        return c.text(body);
-    } catch (error) {
-        return c.json({ error: describeError(error) }, 500);
-    }
-});
-
-app.get("/api/previews", (c) => {
-    return c.json(registry.list().map((preview) => ({ ...preview, url: registry.primaryUrlOf(preview) })));
-});
-
+// For scripts, which is why it is a get. Registered before /api/previews/:slug, which it would
+// otherwise be taken for.
 app.get("/api/previews/start", async (c) => {
     const org = c.req.query("org");
     const repo = c.req.query("repo");
@@ -294,7 +139,7 @@ app.get("/api/previews/start", async (c) => {
     }
     try {
         const preview = await registry.request({ org, repo, branch });
-        return c.json({ ...preview, url: registry.primaryUrlOf(preview) });
+        return c.json(toJson(preview));
     } catch (error) {
         if (error instanceof PreviewError) {
             return c.json({ error: error.message }, 400);
@@ -303,12 +148,62 @@ app.get("/api/previews/start", async (c) => {
     }
 });
 
+/** Cpu and memory of every running preview by slug. Separate, because docker stats takes a moment. */
+app.get("/api/usage", async (c) => {
+    try {
+        const byProject = await readUsageByComposeProject();
+        const bySlug: Record<string, ContainerUsage> = {};
+        for (const preview of registry.list()) {
+            const usage = byProject.get(registry.composeProject(preview));
+            if (usage) {
+                bySlug[preview.slug] = usage;
+            }
+        }
+        return c.json(bySlug);
+    } catch (error) {
+        return c.json({ error: `Could not read container usage: ${describeError(error)}` }, 500);
+    }
+});
+
+app.get("/api/previews/:slug", (c) => {
+    const preview = registry.get(c.req.param("slug"));
+    if (!preview) {
+        return c.json({ error: `Unknown preview "${c.req.param("slug")}"` }, 404);
+    }
+    return c.json({
+        ...toJson(preview),
+        // A project that has not reported any urls yet is still reachable on its own host.
+        links: preview.urls.length > 0 ? preview.urls : [{ name: "Preview", url: registry.urlOf(preview) }],
+        // Whether the container logs start at the last start, which is what the logs page has to say.
+        containerLogsSinceLastStart: registry.secondsSinceStartAttempt(preview.slug) !== undefined,
+    });
+});
+
+/**
+ * Starting a stopped preview and restarting a running one are the same operation: fetch the
+ * branch, rebuild and bring the project up - which is why a restart is also how a preview picks
+ * up new commits. It runs in the background, so the answer comes right away and the detail page
+ * shows how far it got. A failed preview is never picked up again on its own, so this is the way
+ * out of it.
+ */
+function bringUp(c: Context<Env, "/api/previews/:slug/*">, { shouldRestart }: { shouldRestart: boolean }) {
+    const preview = registry.get(c.req.param("slug"));
+    if (!preview) {
+        return c.json({ error: `Unknown preview "${c.req.param("slug")}"` }, 404);
+    }
+    registry.resumeInBackground(preview, { shouldRestart });
+    return c.json({ ok: true });
+}
+
+app.post("/api/previews/:slug/start", (c) => bringUp(c, { shouldRestart: false }));
+app.post("/api/previews/:slug/restart", (c) => bringUp(c, { shouldRestart: true }));
+
 app.post("/api/previews/:slug/stop", async (c) => {
     try {
         await registry.stop(c.req.param("slug"));
         return c.json({ ok: true });
     } catch (error) {
-        return c.json({ error: describeError(error) }, error instanceof PreviewError ? 404 : 500);
+        return errorResponse(c, error);
     }
 });
 
@@ -317,18 +212,49 @@ app.delete("/api/previews/:slug", async (c) => {
         await registry.remove(c.req.param("slug"));
         return c.json({ ok: true });
     } catch (error) {
-        return c.json({ error: describeError(error) }, error instanceof PreviewError ? 404 : 500);
+        return errorResponse(c, error);
     }
 });
 
-/** Where `npm run build` puts the react frontend, relative to the working directory like serveStatic wants it. */
+app.get("/api/previews/:slug/services", async (c) => {
+    const slug = c.req.param("slug");
+    if (!registry.get(slug)) {
+        return c.json({ error: `Unknown preview "${slug}"` }, 404);
+    }
+    return c.json(await registry.listServices(slug).catch(() => []));
+});
+
+const servicePattern = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/;
+
+app.get("/api/previews/:slug/logs", async (c) => {
+    const slug = c.req.param("slug");
+    if (!registry.get(slug)) {
+        return c.json({ error: `Unknown preview "${slug}"` }, 404);
+    }
+    const service = c.req.query("service");
+    const tail = Number(c.req.query("tail") ?? 200);
+    const options = {
+        tail: Number.isInteger(tail) && tail > 0 && tail <= 5000 ? tail : 200,
+        service: service && servicePattern.test(service) ? service : undefined,
+    };
+    const source = c.req.query("source") ?? "containers";
+    try {
+        const body = source === "start" ? await registry.readStartLog(slug) : await registry.readContainerLogs(slug, options);
+        return c.text(body);
+    } catch (error) {
+        return c.json({ error: describeError(error) }, 500);
+    }
+});
+
+app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
+
+/** Where `npm run build` puts the frontend, relative to the working directory like serveStatic wants it. */
 const frontendDir = "frontend/dist";
 
-// The react frontend, behind the same session as everything else. It is a single page app, so every
-// path below /app/ that is not a built file gets its index.html.
-app.get("/app", (c) => c.redirect("/app/"));
-app.use("/app/*", serveStatic({ root: frontendDir, rewriteRequestPath: (path) => path.slice("/app".length) }));
-app.get("/app/*", async (c) => {
+// The react frontend is the whole ui of the controller host. It is a single page app, so every
+// path that is not a built file gets its index.html and the frontend routes it.
+app.use("*", serveStatic({ root: frontendDir }));
+app.get("*", async (c) => {
     const index = await readFile(`${frontendDir}/index.html`, "utf8").catch(() => undefined);
     return index ? c.html(index) : c.text("The frontend has not been built, run npm run build.", 404);
 });

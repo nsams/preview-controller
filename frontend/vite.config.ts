@@ -14,15 +14,13 @@ export default defineConfig(({ mode }) => {
 
     return {
         root: new URL(".", import.meta.url).pathname,
-        // Served by the controller under /app/, next to the server rendered pages.
-        base: "/app/",
         plugins: [react()],
         build: {
             outDir: "dist",
             emptyOutDir: true,
         },
         server: {
-            // Opened as http://<base domain>:5173/app/ - the session cookie is set on the base
+            // Opened as http://<base domain>:5173/ - the session cookie is set on the base
             // domain and cookies ignore the port, so the dev server shares the controller session.
             // The host header is passed on unchanged, which is how the controller knows the
             // requests are meant for itself and not for a preview.

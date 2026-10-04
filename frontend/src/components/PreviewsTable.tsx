@@ -1,8 +1,10 @@
-import { describeRef, logsPath, previewPath, type Preview } from "./api.ts";
-import { formatDuration } from "./format.ts";
+import { Link } from "react-router";
+
+import { describeRef, logsPath, previewPath, type ContainerUsage, type Preview } from "../api.ts";
+import { formatCpu, formatDuration, formatMemory } from "../format.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 
-export function PreviewsTable({ previews }: { previews: Preview[] }) {
+export function PreviewsTable({ previews, usage }: { previews: Preview[]; usage?: Record<string, ContainerUsage> }) {
     if (previews.length === 0) {
         return <p>No previews yet.</p>;
     }
@@ -15,6 +17,8 @@ export function PreviewsTable({ previews }: { previews: Preview[] }) {
                     <th>Port</th>
                     <th>Uptime</th>
                     <th>Idle</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
                     <th></th>
                 </tr>
             </thead>
@@ -22,7 +26,7 @@ export function PreviewsTable({ previews }: { previews: Preview[] }) {
                 {previews.map((preview) => (
                     <tr key={preview.slug}>
                         <td className="wrap">
-                            <a href={previewPath(preview.slug)}>{describeRef(preview)}</a>
+                            <Link to={previewPath(preview.slug)}>{describeRef(preview)}</Link>
                         </td>
                         <td>
                             <StatusBadge status={preview.status} />
@@ -30,8 +34,10 @@ export function PreviewsTable({ previews }: { previews: Preview[] }) {
                         <td>{preview.port ?? "-"}</td>
                         <td>{formatDuration(preview.startedAt)}</td>
                         <td>{formatDuration(preview.lastAccessAt)}</td>
+                        <td>{formatCpu(usage?.[preview.slug]?.cpuPercent)}</td>
+                        <td>{formatMemory(usage?.[preview.slug]?.memoryBytes)}</td>
                         <td>
-                            <a href={logsPath(preview.slug)}>logs</a>
+                            <Link to={logsPath(preview.slug)}>logs</Link>
                         </td>
                     </tr>
                 ))}

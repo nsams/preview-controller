@@ -1,4 +1,4 @@
-/* The same look as the server rendered pages in src/pages.ts. */
+/* The pages a preview host shows in src/pages.ts use the same tokens. */
 :root {
     color-scheme: light dark;
     --bg: #f6f7f9;
@@ -139,4 +139,167 @@ button {
     background: #c0392b22;
     color: #c0392b;
     font-size: 14px;
+}
+h2 {
+    font-size: 15px;
+    margin: 24px 0 8px;
+}
+h2:first-child {
+    margin-top: 0;
+}
+.card .error {
+    margin-bottom: 16px;
+}
+.start-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.2fr auto;
+    gap: 12px;
+    align-items: end;
+}
+.start-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 600;
+}
+@media (max-width: 640px) {
+    .start-form {
+        grid-template-columns: 1fr;
+    }
+}
+button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    flex: none;
+}
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+.starting {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    color: var(--muted);
+    font-size: 14px;
+}
+code,
+pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+code {
+    font-size: 13px;
+}
+pre {
+    margin: 0;
+    padding: 14px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    max-height: 60vh;
+    font-size: 12px;
+    line-height: 1.45;
+}
+.link-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.link-buttons a {
+    padding: 11px 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    text-decoration: none;
+    font-weight: 600;
+}
+.link-buttons a:first-child {
+    border-color: var(--accent);
+}
+.facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 20px;
+    margin: 0;
+    font-size: 14px;
+}
+.facts .fact {
+    display: contents;
+}
+.facts dt {
+    color: var(--muted);
+}
+.facts dd {
+    margin: 0;
+}
+.actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+.actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--fg);
+}
+.actions button.danger {
+    border-color: #c0392b55;
+    color: #c0392b;
+}
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px;
+    font-size: 13px;
+}
+.filters a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    text-decoration: none;
+}
+.filters a[aria-current] {
+    border-color: var(--accent);
+    font-weight: 600;
+}
+/* After the aria-current rule, so that a failing service stays red even while it is selected. */
+.filters a.chip-failed {
+    border-color: #c0392b66;
+    background: #c0392b18;
+    color: #c0392b;
+}
+.filters a.chip-starting {
+    border-color: #b4790066;
+    background: #b4790018;
+    color: #b47900;
+}
+.filters a.chip-stopped {
+    color: var(--muted);
+}
+/* The state is spelled out next to the name, so the chips do not rely on their colour alone. */
+.chip-state {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }

@@ -12,3 +12,14 @@ export function formatDuration(from: number | undefined, now = Date.now()): stri
     }
     return `${Math.floor(hours / 24)}d`;
 }
+
+export function formatMemory(bytes: number | undefined): string {
+    if (!bytes) {
+        return "-";
+    }
+    return `${(bytes / 1024 ** 2).toFixed(0)} MiB`;
+}
+
+export function formatCpu(percent: number | undefined): string {
+    return percent === undefined ? "-" : `${percent.toFixed(1)} %`;
+}
