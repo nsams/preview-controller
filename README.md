@@ -85,6 +85,9 @@ It works with the same json api a script would use:
 | `GET`    | `/api/previews/:slug/logs`                             | Start log or container logs as plain text                      |
 | `GET`    | `/api/usage`                                           | Cpu and memory of every running preview by slug                |
 
+Next to the api, `GET /open/<org>/<repo>/<branch>` starts a preview like `/api/previews/start` and
+redirects the browser to it - the link of the [GitHub action](#link-from-github).
+
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
 once and reuse the cookie:
 
@@ -324,6 +327,39 @@ The first entry is where the controller sends you after starting a preview. Only
 `https` urls are accepted, everything else in that file is ignored. The file stays in the
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
+
+## Link from GitHub
+
+[github-action/action.yml](github-action/action.yml) is a reusable action for the repositories that get previewed. It starts
+nothing. All it does is add a commit status, shown in the checks of a pull request, whose
+details link points to `/open/<org>/<repo>/<branch>` on the controller. Following that link starts
+the preview of the branch, or only opens it when it already runs, and sends the browser to it -
+through the page that reloads itself while the preview is still coming up. Without a session the
+login comes first and leads back to the link.
+
+```yaml
+# .github/workflows/preview.yml in the previewed repository
+name: Preview
+
+on:
+    pull_request:
+
+permissions:
+    statuses: write
+
+jobs:
+    preview:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: nsams/preview-controller/github-action@main
+              with:
+                  controller-url: https://preview.example.com
+```
+
+Organization, repository and branch default to the ones the workflow runs for, the status is
+added to the head commit of the pull request. `context` and `description` change how the status
+is labelled. Pull requests from forks get no status, because they are never previewed (see
+[Security](#security)).
 
 ## Tests
 

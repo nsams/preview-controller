@@ -111,6 +111,16 @@ export function unknownHostPage(host: string): string {
     );
 }
 
+/** What /open/<org>/<repo>/<branch> answers when the three do not name a preview that can be started. */
+export function cannotOpenPage(message: string): string {
+    return layout(
+        "Cannot open preview",
+        `<h1>Cannot open this preview</h1>
+        <p class="lead">${escapeHtml(message)}</p>
+        <div class="card"><p>The link has the form <code>/open/&lt;org&gt;/&lt;repo&gt;/&lt;branch&gt;</code>.</p></div>`,
+    );
+}
+
 /** Routes of the frontend, linked from the pages above. */
 function previewPath(slug: string): string {
     return `/previews/${encodeURIComponent(slug)}`;

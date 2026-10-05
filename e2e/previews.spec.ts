@@ -135,3 +135,21 @@ test("a restarted controller finds its previews again", async ({ api, controller
     expect(await api.preview(slug)).toMatchObject({ status: "running", commit: before.commit, ref: before.ref, urls: before.urls });
     expect((await api.request(previewUrl(slug))).status).toBe(200);
 });
+
+test("the link of the github action starts the preview and opens it", async ({ page, api, controller, branch, slug }) => {
+    await controller.repository.push(branch);
+
+    await page.goto(`/open/acme/demo/${branch}`);
+    await expect(page.locator("body")).toContainText('"version":"v1"', { timeout: 90_000 });
+
+    // Once it runs, the same link only opens it.
+    const response = await api.request(`/open/acme/demo/${branch}`);
+    expect(response.status).toBe(302);
+    expect((await api.preview(slug))?.status).toBe("running");
+});
+
+test("the link of the github action reports an invalid branch", async ({ api }) => {
+    const response = await api.request("/open/acme/demo/-not-a-branch");
+    expect(response.status).toBe(400);
+    expect(response.body).toContain("Invalid branch");
+});
