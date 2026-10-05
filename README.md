@@ -250,7 +250,8 @@ It is called with these environment variables:
 | `PREVIEW_URLS`         | File the script may report the urls of the preview to          |
 
 [example/](example) is a minimal project that does exactly that and can be copied as a starting
-point.
+point. The [start-preview.sh](start-preview.sh) in the root of this repository hands over to it,
+so this repository can be started as a preview itself.
 
 Anything else - installing dependencies, rendering configuration, building images - is up to
 that script. Whatever it writes to stdout or stderr ends up in the start log of the preview as

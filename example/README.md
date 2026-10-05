@@ -12,12 +12,16 @@ serves its admin or idp next to the site.
 | [Caddyfile](Caddyfile)                   | Routes `$PREVIEW_DOMAIN` and `admin--$PREVIEW_DOMAIN` by host name |
 | [site/](site), [admin/](admin)           | The pages, rendered by caddy's templates to show slug and host     |
 
-The controller looks for `start-preview.sh` in the root of the repository, so to try it, push the
-contents of this folder to the root of a repository of its own and start a preview of it:
+The controller only looks for `start-preview.sh` in the root of a repository, so the root of this
+repository has one that hands over to [start-preview.sh](start-preview.sh) here. Starting a preview
+of the controller repository itself therefore starts this example:
 
 ```bash
-curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=<org>&repo=<repo>&branch=main"
+curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=nsams&repo=preview-controller&branch=main"
 ```
+
+To use it as the starting point of another project, copy the contents of this folder to the root
+of that repository.
 
 The pages are copied into the image rather than mounted, so a change only shows up after a
 restart, which fetches the branch and rebuilds - the same as in a real project.
