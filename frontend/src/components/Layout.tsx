@@ -1,21 +1,20 @@
-import AppBar from "@mui/material/AppBar";
+import { AppHeader, MainContent } from "@dextinity/admin";
 import Container from "@mui/material/Container";
 import Link from "@mui/material/Link";
-import Toolbar from "@mui/material/Toolbar";
-import { Outlet } from "react-router";
+import type { ReactNode } from "react";
 
-export function Layout() {
+const headerHeight = 60;
+
+export function Layout({ children }: { children: ReactNode }) {
     return (
         <>
-            <AppBar position="static" elevation={0}>
-                <Toolbar variant="dense">
-                    <Link href="/" color="inherit" underline="none" variant="h6">
-                        Preview Controller
-                    </Link>
-                </Toolbar>
-            </AppBar>
-            <Container maxWidth="lg" sx={{ py: 3 }}>
-                <Outlet />
+            <AppHeader position="sticky" headerHeight={headerHeight}>
+                <Link href="/" color="inherit" underline="none" variant="h4" sx={{ px: 4 }}>
+                    Preview Controller
+                </Link>
+            </AppHeader>
+            <Container maxWidth="lg" disableGutters>
+                <MainContent>{children}</MainContent>
             </Container>
         </>
     );

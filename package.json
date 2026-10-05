@@ -22,15 +22,27 @@
         "test:e2e": "npm run build && playwright test"
     },
     "dependencies": {
+        "@apollo/client": "^3.14.1",
+        "@dextinity/admin": "10.8.0",
+        "@dextinity/admin-icons": "10.8.0",
         "@emotion/react": "^11.14.0",
         "@emotion/styled": "^11.14.1",
+        "@fontsource-variable/roboto-flex": "^5.3.0",
         "@hono/node-server": "^1.15.0",
-        "@mui/icons-material": "^9.4.0",
-        "@mui/material": "^9.4.0",
+        "@mui/material": "^7.3.11",
+        "@mui/x-data-grid": "^8.29.3",
+        "@mui/x-date-pickers": "^8.29.3",
+        "final-form": "^4.20.10",
+        "graphql": "^16.14.2",
+        "history": "^4.10.1",
         "hono": "^4.7.0",
         "react": "^19.3.0",
+        "react-dnd": "^16.0.1",
         "react-dom": "^19.3.0",
-        "react-router": "^8.4.0"
+        "react-final-form": "^6.5.9",
+        "react-intl": "^7.1.14",
+        "react-router": "^5.3.4",
+        "react-router-dom": "^5.3.4"
     },
     "devDependencies": {
         "@dextinity/eslint-config": "10.8.0",
@@ -38,6 +50,8 @@
         "@types/node": "^24.13.6",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
+        "@types/react-router": "^5.1.20",
+        "@types/react-router-dom": "^5.3.3",
         "@vitejs/plugin-react": "^6.1.1",
         "eslint": "^9.39.5",
         "husky": "^9.1.7",
@@ -50,5 +64,13 @@
     },
     "engines": {
         "node": "24"
+    },
+    "overrides": {
+        "react-final-form": {
+            "react": "^19.3.0"
+        },
+        "react-final-form-arrays": {
+            "react": "^19.3.0"
+        }
     }
 }

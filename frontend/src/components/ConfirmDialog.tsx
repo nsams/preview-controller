@@ -1,4 +1,4 @@
-import Button from "@mui/material/Button";
+import { Button } from "@dextinity/admin";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -27,10 +27,11 @@ export function ConfirmDialog({
                 <DialogContentText>{text}</DialogContentText>
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
+                <Button variant="textDark" onClick={onClose}>
+                    Cancel
+                </Button>
                 <Button
-                    color="error"
-                    variant="contained"
+                    variant="destructive"
                     onClick={() => {
                         onClose();
                         onConfirm();

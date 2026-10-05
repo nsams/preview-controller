@@ -1,7 +1,6 @@
-import TerminalIcon from "@mui/icons-material/Terminal";
-import Alert from "@mui/material/Alert";
+import { Alert, Button, FillSpace } from "@dextinity/admin";
+import { Wrench } from "@dextinity/admin-icons";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
@@ -9,7 +8,7 @@ import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 import { useCallback, useEffect, useState } from "react";
-import { Link as RouterLink, useSearchParams } from "react-router";
+import { Link as RouterLink, useLocation } from "react-router-dom";
 
 import { fetchContainerLog, fetchServices, fetchStartLog, type PreviewDetails, previewPath, type ServiceState } from "../api.ts";
 import { usePolling } from "../usePolling.ts";
@@ -53,8 +52,7 @@ function tabValue(selection: Selection): string {
 /** The start log and the container logs of a preview as tabs of one card, the lower part of its detail page. */
 export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
     const { slug } = preview;
-    const [searchParams] = useSearchParams();
-    const selection = readSelection(searchParams);
+    const selection = readSelection(new URLSearchParams(useLocation().search));
     const { source } = selection;
     const service = selection.source === "containers" ? selection.service : undefined;
     const shown = tabValue(selection);
@@ -115,9 +113,9 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
                     <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
                         Logs
                     </Typography>
-                    <Box sx={{ flex: 1 }} />
+                    <FillSpace />
                     {isLive ? null : (
-                        <Button size="small" onClick={logs.reload}>
+                        <Button variant="textDark" onClick={logs.reload}>
                             Reload
                         </Button>
                     )}
@@ -141,7 +139,7 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
                     <Tab
                         value="start"
                         label="Start log"
-                        icon={<TerminalIcon fontSize="small" />}
+                        icon={<Wrench />}
                         iconPosition="start"
                         component={RouterLink}
                         to={selectionPath(slug, { source: "start" })}
