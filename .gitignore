@@ -10,8 +10,9 @@ frontend/dist
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 
-# Installed by .claude/scripts/session-start.sh
-.claude/skills/playwright-cli/
+# Agent skills, installed by .claude/scripts/session-start.sh and skills-npm (prepare script)
+.claude/skills/
+.agents/skills/
 
 # Playwright
 test-results/
