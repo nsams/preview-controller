@@ -92,11 +92,13 @@ const statusSeverity: Record<ServiceStatus, number> = { failed: 3, starting: 2, 
  * counts as failed here and not as "on its way up".
  */
 function containerState(state: string, exitCode: number, health: string): { status: ServiceStatus; detail: string } {
-    if (health === "unhealthy") {
-        return { status: "failed", detail: "unhealthy" };
-    }
     switch (state) {
         case "running":
+            // The health check only means something while the container runs - an exited one
+            // keeps its last result, which would hide how it exited.
+            if (health === "unhealthy") {
+                return { status: "failed", detail: "unhealthy" };
+            }
             return health === "starting" ? { status: "starting", detail: "starting" } : { status: "running", detail: "running" };
         case "created":
             return { status: "starting", detail: "created" };

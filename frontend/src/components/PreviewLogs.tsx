@@ -86,8 +86,10 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
     }
 
     // The preview as a whole still counts as running while one of its containers keeps crashing,
-    // so the failing ones are called out above the log instead of only being coloured in.
-    const failed = services.data.filter((candidate) => candidate.status === "failed");
+    // so the failing ones are called out above the log instead of only being coloured in. Once the
+    // preview is stopped its containers are meant to be down, how they went down is no news then.
+    const isStopped = preview.status === "stopped";
+    const failed = isStopped ? [] : services.data.filter((candidate) => candidate.status === "failed");
     const emptyText =
         source === "start"
             ? "The controller has not started this preview yet."
@@ -143,11 +145,11 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
                             key={name}
                             value={`service:${name}`}
                             // A service that is simply running needs no second label - only the others get one.
-                            label={status === "running" ? name : `${name} · ${detail}`}
+                            label={status === "running" || isStopped ? name : `${name} · ${detail}`}
                             title={`${name}: ${detail}`}
                             component={RouterLink}
                             to={selectionPath(slug, { source: "containers", service: name })}
-                            sx={{ color: tabColors[status], "&.Mui-selected": { color: tabColors[status] } }}
+                            sx={isStopped ? undefined : { color: tabColors[status], "&.Mui-selected": { color: tabColors[status] } }}
                             data-status={status}
                         />
                     ))}
