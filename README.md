@@ -96,7 +96,11 @@ curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-
 ## Frontend
 
 The ui of the controller is a react app in [frontend/](frontend), built with vite and
-[mui](https://mui.com/material-ui/). The controller serves the build from `frontend/dist` on the
+[mui](https://mui.com/material-ui/), with the theme and components of `@dextinity/admin` on top -
+like the admin of [dextinity-starter](https://github.com/vivid-planet/dextinity-starter/tree/main/admin).
+That pins mui to 7 and react-router to 5, the versions `@dextinity/admin` supports, and brings
+its other peer dependencies (apollo, final-form, react-intl, the mui x packages, ...) along even
+though only the theme, layout, buttons, alerts and fields are used. The controller serves the build from `frontend/dist` on the
 base domain, behind the same password, and answers every path that is not a file or under `/api`
 with its `index.html`, so the frontend does the routing. The only pages still rendered by the
 controller itself are the ones a preview host shows in place of the preview - starting, failed,
