@@ -86,6 +86,9 @@ It works with the same json api a script would use:
 | `GET`    | `/api/previews/:slug/logs/stream`                      | The same, followed live as server-sent events                  |
 | `GET`    | `/api/usage`                                           | Cpu and memory of every running preview by slug                |
 
+Next to the api, `GET /open/<org>/<repo>/<branch>` starts a preview like `/api/previews/start` and
+redirects the browser to it - the link of the [GitHub action](#link-from-github).
+
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
 once and reuse the cookie:
 
@@ -97,7 +100,11 @@ curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-
 ## Frontend
 
 The ui of the controller is a react app in [frontend/](frontend), built with vite and
-[mui](https://mui.com/material-ui/). The controller serves the build from `frontend/dist` on the
+[mui](https://mui.com/material-ui/), with the theme and components of `@dextinity/admin` on top -
+like the admin of [dextinity-starter](https://github.com/vivid-planet/dextinity-starter/tree/main/admin).
+That pins mui to 7 and react-router to 5, the versions `@dextinity/admin` supports, and brings
+its other peer dependencies (apollo, final-form, react-intl, the mui x packages, ...) along even
+though only the theme, layout, buttons, alerts and fields are used. The controller serves the build from `frontend/dist` on the
 base domain, behind the same password, and answers every path that is not a file or under `/api`
 with its `index.html`, so the frontend does the routing. The only pages still rendered by the
 controller itself are the ones a preview host shows in place of the preview - starting, failed,
@@ -242,7 +249,10 @@ single label under the base domain - see below.
   `<name>.<slug>.<baseDomain>` spelling is still routed, for projects that have not been changed
   over - but it is exactly what has no certificate.
 - **Starting** checks out the branch and runs the start script of the repository. That happens
-  in the background, the api returns right away.
+  in the background, the api returns right away. Before a new preview is created, a quick check -
+  `git ls-remote` and a fetch of the trees of the branch tip, without any file contents - makes
+  sure the repository and branch exist and the start script is there and executable. Otherwise
+  the form or the api answers with the error right away, and no preview is created.
 - **Idle previews** are stopped with `docker compose stop` after `idleTimeoutMinutes` without a
   request. Images and volumes stay, so the next start reuses them.
 - **Deleting a stopped preview** does the same as that sweep, on demand: the detail page of a
@@ -330,6 +340,39 @@ The first entry is where the controller sends you after starting a preview. Only
 `https` urls are accepted, everything else in that file is ignored. The file stays in the
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
+
+## Link from GitHub
+
+[github-action/action.yml](github-action/action.yml) is a reusable action for the repositories that get previewed. It starts
+nothing. All it does is add a commit status, shown in the checks of a pull request, whose
+details link points to `/open/<org>/<repo>/<branch>` on the controller. Following that link starts
+the preview of the branch, or only opens it when it already runs, and sends the browser to it -
+through the page that reloads itself while the preview is still coming up. Without a session the
+login comes first and leads back to the link.
+
+```yaml
+# .github/workflows/preview.yml in the previewed repository
+name: Preview
+
+on:
+    pull_request:
+
+permissions:
+    statuses: write
+
+jobs:
+    preview:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: nsams/preview-controller/github-action@main
+              with:
+                  controller-url: https://preview.example.com
+```
+
+Organization, repository and branch default to the ones the workflow runs for, the status is
+added to the head commit of the pull request. `context` and `description` change how the status
+is labelled. Pull requests from forks get no status, because they are never previewed (see
+[Security](#security)).
 
 ## Tests
 

@@ -37,6 +37,21 @@ test("an invalid branch is reported in the form", async ({ page }) => {
     await expect(page.getByRole("alert")).toHaveText('Invalid branch "-not-a-branch"');
 });
 
+test("a branch that cannot start is reported in the form, without creating a preview", async ({ page, api, controller, branch }) => {
+    await page.getByLabel("Organization").fill("acme");
+    await page.getByLabel("Repository").fill("demo");
+    await page.getByLabel("Branch").fill(branch);
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.getByRole("alert")).toContainText(`Branch "${branch}" does not exist`);
+
+    await controller.repository.push(branch);
+    await page.getByLabel("Start script").fill("missing.sh");
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.getByRole("alert")).toContainText('Start script "missing.sh" does not exist');
+
+    expect((await api.previews()).filter((preview) => preview.ref?.branch === branch)).toEqual([]);
+});
+
 test("proxies every host of a preview without the session cookie", async ({ api, controller, branch }) => {
     const slug = await startPreview(api, controller, branch);
     await waitFor(api, slug, "running");
@@ -126,6 +141,40 @@ test("the logs page follows the logs while it is open", async ({ page, api, cont
     await expect(page.locator("pre").first()).not.toContainText("building v1");
 });
 
+test("the logs only follow while follow is switched on", async ({ page, api, controller, branch, slug }) => {
+    await startPreview(api, controller, branch);
+    await waitFor(api, slug, "running");
+    const request = async (count: number, path: string) => {
+        for (let index = 0; index < count; index++) {
+            await api.request(`${previewUrl(slug)}/${path}-${index}`);
+        }
+    };
+
+    await page.goto(`/previews/${slug}/logs`);
+    await expect(page.getByTestId("container-log-state")).toHaveText("live");
+    const log = page.locator("pre").last();
+    const follow = page.getByRole("switch", { name: "Follow" }).last();
+    const distanceFromBottom = () => log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight);
+
+    await expect(follow).toBeChecked();
+    await request(80, "followed");
+    await expect(log).toContainText("fixture app served /followed-79");
+    await expect.poll(distanceFromBottom).toBeLessThan(5);
+
+    await follow.uncheck();
+    const scrollTop = await log.evaluate((element) => element.scrollTop);
+    await request(40, "not-followed");
+    await expect(log).toContainText("fixture app served /not-followed-39");
+    expect(await log.evaluate((element) => element.scrollTop)).toBe(scrollTop);
+    expect(await distanceFromBottom()).toBeGreaterThan(100);
+
+    // Switching it back on jumps to the end, scrolling up switches it off again.
+    await follow.check();
+    await expect.poll(distanceFromBottom).toBeLessThan(5);
+    await log.evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect(follow).not.toBeChecked();
+});
+
 test("a restarted controller finds its previews again", async ({ api, controller, branch }) => {
     const slug = await startPreview(api, controller, branch);
     const before = await waitFor(api, slug, "running");
@@ -136,4 +185,22 @@ test("a restarted controller finds its previews again", async ({ api, controller
     // Nothing is stored, docker and the checkout are all it goes by.
     expect(await api.preview(slug)).toMatchObject({ status: "running", commit: before.commit, ref: before.ref, urls: before.urls });
     expect((await api.request(previewUrl(slug))).status).toBe(200);
+});
+
+test("the link of the github action starts the preview and opens it", async ({ page, api, controller, branch, slug }) => {
+    await controller.repository.push(branch);
+
+    await page.goto(`/open/acme/demo/${branch}`);
+    await expect(page.locator("body")).toContainText('"version":"v1"', { timeout: 90_000 });
+
+    // Once it runs, the same link only opens it.
+    const response = await api.request(`/open/acme/demo/${branch}`);
+    expect(response.status).toBe(302);
+    expect((await api.preview(slug))?.status).toBe("running");
+});
+
+test("the link of the github action reports an invalid branch", async ({ api }) => {
+    const response = await api.request("/open/acme/demo/-not-a-branch");
+    expect(response.status).toBe(400);
+    expect(response.body).toContain("Invalid branch");
 });

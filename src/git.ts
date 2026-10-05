@@ -1,7 +1,8 @@
-import { access } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { run } from "./exec.ts";
+import { describeError, run } from "./exec.ts";
 import { type RepositoryRef, validateRepositoryRef } from "./repository.ts";
 
 export type Checkout = {
@@ -52,6 +53,54 @@ export async function checkoutBranch(repositoryUrl: string, branch: string, dire
     }
     const { stdout } = await run("git", ["-C", directory, "rev-parse", "--short", "HEAD"]);
     return stdout.trim();
+}
+
+/** A check is meant to answer while the form waits, a full clone may take as long as it needs. */
+const checkTimeoutMs = 60 * 1000;
+
+/**
+ * Checks, without a checkout, that the repository and the branch exist and that the branch has an
+ * executable start script - what a start would otherwise only find out after a preview has been
+ * created for it. Only the trees of the tip of the branch are fetched, no file contents, so this
+ * takes about as long as a single request. Returns what is wrong, or undefined.
+ */
+export async function findStartProblem(repositoryUrl: string, branch: string, script: string, token?: string): Promise<string | undefined> {
+    // Asking for credentials on a terminal would leave the request hanging instead of failing.
+    const env = { ...authEnv(token), GIT_TERMINAL_PROMPT: "0" };
+    const options = { env, timeoutMs: checkTimeoutMs };
+    try {
+        const { stdout } = await run("git", ["ls-remote", "--heads", "--", repositoryUrl, `refs/heads/${branch}`], options);
+        if (stdout.trim() === "") {
+            return `Branch "${branch}" does not exist`;
+        }
+    } catch (error) {
+        return `Repository not found or not accessible: ${describeError(error)}`;
+    }
+
+    const directory = await mkdtemp(join(tmpdir(), "preview-check-"));
+    try {
+        await run("git", ["init", "--quiet", "--bare", directory]);
+        await run(
+            "git",
+            ["-C", directory, "fetch", "--quiet", "--depth", "1", "--filter=blob:none", "--", repositoryUrl, `refs/heads/${branch}`],
+            options,
+        );
+        // "<mode> <type> <object>\t<path>", nothing at all for a path that does not exist.
+        const { stdout } = await run("git", ["-C", directory, "ls-tree", "FETCH_HEAD", "--", script]);
+        const [mode, type] = stdout.trim().split(/\s+/);
+        if (!mode) {
+            return `Start script "${script}" does not exist on ${branch}`;
+        }
+        if (type !== "blob") {
+            return `Start script "${script}" is not a file`;
+        }
+        // A symlink (120000) is left to the start itself, which is where it can be followed.
+        return mode === "100644" ? `Start script "${script}" is not executable` : undefined;
+    } catch (error) {
+        return `Could not check ${branch}: ${describeError(error)}`;
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
 }
 
 // Both forms are accepted, because a host may rewrite https to ssh to authenticate.

@@ -1,4 +1,4 @@
-import Button from "@mui/material/Button";
+import { Button } from "@dextinity/admin";
 
 import { PageHeader } from "../components/PageHeader.tsx";
 

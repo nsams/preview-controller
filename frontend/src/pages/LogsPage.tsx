@@ -1,16 +1,16 @@
-import Alert from "@mui/material/Alert";
+import { Alert, FillSpace } from "@dextinity/admin";
 import Box from "@mui/material/Box";
 import Chip, { type ChipProps } from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { useCallback } from "react";
-import { Link as RouterLink, useParams, useSearchParams } from "react-router";
+import { useCallback, useState } from "react";
+import { Link as RouterLink, useLocation, useParams } from "react-router-dom";
 
 import { containerLogStreamUrl, fetchPreview, fetchServices, logsPath, previewPath, type ServiceState, startLogStreamUrl } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
-import { LogView } from "../components/LogView.tsx";
+import { FollowSwitch, LogView } from "../components/LogView.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
 import { useLogStream } from "../useLogStream.ts";
@@ -26,8 +26,8 @@ const chipColors: Record<ServiceState["status"], ChipProps["color"]> = {
 };
 
 export function LogsPage() {
-    const slug = useParams().slug ?? "";
-    const service = useSearchParams()[0].get("service") ?? undefined;
+    const { slug } = useParams<{ slug: string }>();
+    const service = new URLSearchParams(useLocation().search).get("service") ?? undefined;
 
     // The logs themselves are streamed, this only keeps the status and the services up to date.
     const load = useCallback(async () => {
@@ -38,6 +38,8 @@ export function LogsPage() {
     const data = logs.data;
 
     const startLog = useLogStream(startLogStreamUrl(slug));
+    const [followStartLog, setFollowStartLog] = useState(true);
+    const [followContainerLog, setFollowContainerLog] = useState(true);
     // Compose follows the containers that are there when it starts, so the stream is opened again
     // whenever containers may have come or gone: when the preview changes its status, and when a
     // service starts running again - after a crash, say, or once the stream ended with the
@@ -86,24 +88,31 @@ export function LogsPage() {
                 <ErrorMessage error={logs.error} />
 
                 <Paper variant="outlined" sx={{ p: 2.5 }}>
-                    <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 1.5 }}>
-                        Start log
-                    </Typography>
-                    <LogView>{startLog.text.trim() || "The controller has not started this preview yet."}</LogView>
+                    <Stack direction="row" sx={{ alignItems: "center", mb: 1.5 }}>
+                        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                            Start log
+                        </Typography>
+                        <FillSpace />
+                        <FollowSwitch follow={followStartLog} onFollowChange={setFollowStartLog} />
+                    </Stack>
+                    <LogView follow={followStartLog} onFollowChange={setFollowStartLog}>
+                        {startLog.text.trim() || "The controller has not started this preview yet."}
+                    </LogView>
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: 2.5 }}>
-                    <Stack direction="row" sx={{ alignItems: "baseline", mb: 1.5 }}>
+                    <Stack direction="row" sx={{ alignItems: "center", mb: 1.5 }}>
                         <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
                             Containers
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                             from {tail} lines back{preview.containerLogsSinceLastStart ? ", since the last start" : ""}
                         </Typography>
-                        <Box sx={{ flex: 1 }} />
+                        <FillSpace />
                         <Typography variant="body2" color="text.secondary" data-testid="container-log-state">
                             {containerLog.isConnected ? "live" : containerLog.hasEnded ? "no container running" : ""}
                         </Typography>
+                        <FollowSwitch follow={followContainerLog} onFollowChange={setFollowContainerLog} />
                     </Stack>
 
                     {failed.length > 0 ? (
@@ -144,7 +153,7 @@ export function LogsPage() {
                             <ErrorMessage error={containerLog.error} />
                         </Box>
                     ) : null}
-                    <LogView>
+                    <LogView follow={followContainerLog} onFollowChange={setFollowContainerLog}>
                         {containerLog.text.trim() ||
                             (preview.containerLogsSinceLastStart ? "No container output since the last start." : "No container output.")}
                     </LogView>

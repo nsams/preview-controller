@@ -16,7 +16,7 @@ import {
     type ServiceState,
 } from "./docker.ts";
 import { describeError, runStreaming } from "./exec.ts";
-import { type Checkout, checkoutBranch, readCheckout } from "./git.ts";
+import { type Checkout, checkoutBranch, findStartProblem, readCheckout } from "./git.ts";
 import { createSlug, defaultStartScript, normalizeScript, type RepositoryRef, repositoryUrl, validateRepositoryRef } from "./repository.ts";
 
 type PreviewStatus = "stopped" | "starting" | "running" | "failed";
@@ -249,7 +249,9 @@ export class PreviewRegistry {
 
     /**
      * Returns the preview for a repository and branch, creating and starting it if necessary.
-     * Starting happens in the background - the caller gets the record right away.
+     * Starting happens in the background - the caller gets the record right away. Before a preview
+     * is created, a quick check makes sure that it can start at all: a typo in the branch or the
+     * start script is reported to whoever asked, instead of leaving a failed preview behind.
      */
     async request(ref: RepositoryRef): Promise<Preview> {
         ref = { ...ref, script: normalizeScript(ref.script) };
@@ -259,6 +261,12 @@ export class PreviewRegistry {
         }
 
         const slug = createSlug(ref);
+        if (!this.slugs().has(slug)) {
+            const startProblem = await findStartProblem(repositoryUrl(ref), ref.branch, ref.script ?? defaultStartScript, this.config.githubToken);
+            if (startProblem) {
+                throw new PreviewError(`${formatRef(ref)}: ${startProblem}`);
+            }
+        }
         const runtime = this.runtimeFor(slug);
         runtime.ref = ref;
         runtime.lastAccessAt = Date.now();

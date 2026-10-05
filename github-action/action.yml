@@ -1,0 +1,61 @@
+name: Preview link
+description: >-
+  Adds a commit status that links to the preview controller. Following the link starts the preview
+  of the branch, or opens it when it is already running. Nothing is started by the action itself.
+
+inputs:
+  controller-url:
+    description: Url of the preview controller, e.g. https://preview.example.com
+    required: true
+  context:
+    description: Name of the status, as it shows up in the checks of a pull request
+    default: Preview
+  description:
+    description: Text of the status
+    default: Start or open the preview
+  org:
+    description: GitHub organization of the preview, defaults to the owner of the repository
+    default: ${{ github.repository_owner }}
+  repo:
+    description: Repository of the preview, defaults to the repository the workflow runs in
+    default: ${{ github.event.repository.name }}
+  branch:
+    description: Branch of the preview, defaults to the head branch of the pull request or the pushed branch
+    default: ${{ github.head_ref || github.ref_name }}
+  sha:
+    description: Commit the status is added to, defaults to the head of the pull request or the pushed commit
+    default: ${{ github.event.pull_request.head.sha || github.sha }}
+  github-token:
+    description: Token with statuses write permission
+    default: ${{ github.token }}
+
+outputs:
+  url:
+    description: The link of the status
+    value: ${{ steps.status.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: status
+      shell: bash
+      # Pull requests from forks are never previewed, see the security section of the readme, and
+      # their token could not write the status anyway.
+      if: github.event.pull_request.head.repo.fork != true
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        CONTROLLER_URL: ${{ inputs.controller-url }}
+        STATUS_CONTEXT: ${{ inputs.context }}
+        STATUS_DESCRIPTION: ${{ inputs.description }}
+        PREVIEW_ORG: ${{ inputs.org }}
+        PREVIEW_REPO: ${{ inputs.repo }}
+        PREVIEW_BRANCH: ${{ inputs.branch }}
+        SHA: ${{ inputs.sha }}
+      run: |
+        url="${CONTROLLER_URL%/}/open/$PREVIEW_ORG/$PREVIEW_REPO/$PREVIEW_BRANCH"
+        gh api --silent "repos/$GITHUB_REPOSITORY/statuses/$SHA" \
+            -f state=success \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$STATUS_DESCRIPTION" \
+            -f target_url="$url"
+        echo "url=$url" >> "$GITHUB_OUTPUT"

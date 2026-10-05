@@ -7,7 +7,7 @@
     </head>
     <body>
         <h1>Example preview</h1>
-        <p>This is the site of the preview <code>{{env "PREVIEW_SLUG"}}</code>, served by caddy on <code>{{.Host}}</code>.</p>
-        <p><a href="//admin--{{.Host}}">Open the admin</a></p>
+        <p>This is the site of the preview <code>{{env "PREVIEW_SLUG"}}</code>, served by caddy on <code>{{.Req.Host}}</code>.</p>
+        <p><a href="//admin--{{.Req.Host}}">Open the admin</a></p>
     </body>
 </html>
