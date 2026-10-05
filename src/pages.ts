@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describeRef, type Preview } from "./previews.ts";
 
 // The controller host itself is the react frontend in frontend/. What is left here are the pages
@@ -10,6 +12,10 @@ function escapeHtml(value: string): string {
         return entities[character];
     });
 }
+
+// Inlined, because a request for /favicon.svg on the host of a preview goes to the preview, and
+// without a session it gets the login page.
+const favicon = `data:image/svg+xml;base64,${readFileSync(new URL("../frontend/public/favicon.svg", import.meta.url)).toString("base64")}`;
 
 const styles = `
     :root { color-scheme: light dark; --bg: #f6f7f9; --fg: #1b1d21; --muted: #6b7280; --card: #ffffff; --border: #e3e5e9; --accent: #2f6feb; }
@@ -41,6 +47,7 @@ function layout(title: string, body: string, head = ""): string {
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" type="image/svg+xml" href="${favicon}" />
         <title>${escapeHtml(title)}</title>
         <style>${styles}</style>
         ${head}
