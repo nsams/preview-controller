@@ -3,7 +3,7 @@ import eslintConfigReact from "@dextinity/eslint-config/react.js";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 const config = defineConfig([
-    globalIgnores(["data/**", "frontend/dist/**", "package-lock.json"]),
+    globalIgnores(["data/**", "frontend/dist/**", "test-results/**", "package-lock.json"]),
     {
         files: ["**/*.json"],
         extends: [eslintConfigNode],
@@ -11,6 +11,13 @@ const config = defineConfig([
     {
         files: ["src/**/*.ts"],
         extends: [eslintConfigNode],
+    },
+    {
+        files: ["e2e/**/*.ts", "playwright.config.ts"],
+        extends: [eslintConfigNode],
+        rules: {
+            "import/no-extraneous-dependencies": ["error", { devDependencies: true }],
+        },
     },
     {
         files: ["*.{js,mjs}"],

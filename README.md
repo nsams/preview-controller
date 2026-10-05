@@ -283,6 +283,25 @@ The first entry is where the controller sends you after starting a preview. Only
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
 
+## Tests
+
+```bash
+npm test                          # unit tests, src/*.test.ts
+npx playwright install chromium   # once
+npm run test:e2e                  # end-to-end tests, e2e/*.spec.ts
+```
+
+The unit tests use the test runner of node and need nothing else.
+
+The end-to-end tests build the frontend, start the real controller and drive it through http and
+a browser, so they need docker. They preview [e2e/fixture-project](e2e/fixture-project), a `start-preview.sh` with a
+compose file and an app that answers every request with what it received. Instead of GitHub, it is
+cloned from a bare repository on disk, through a git `insteadOf` rewrite in the environment of the
+controller. Every test pushes a branch of its own and deletes its previews afterwards. A chromium
+that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.github/workflows/test.yml).
+
 ## Limitations
 
 - Http only towards the previews: websockets and other upgrades are not proxied. The previews
