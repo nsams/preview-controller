@@ -6,38 +6,35 @@ import type { Page } from "@playwright/test";
 import { previewUrl } from "./support/environment.ts";
 import { expect, startPreview, test, waitFor } from "./support/fixtures.ts";
 
-/** The detail page reloads itself while a preview starts, this only saves waiting for that. */
-async function expectStatus(page: Page, status: string): Promise<void> {
-    await expect(async () => {
-        await page.reload();
-        await expect(page.locator(".facts .badge")).toHaveText(status, { timeout: 500 });
-    }).toPass({ timeout: 90_000 });
+/** The status chip next to the title. The page polls on its own, so this only has to wait. */
+function expectStatus(page: Page, status: string) {
+    return expect(page.getByText(status, { exact: true })).toBeVisible({ timeout: 90_000 });
 }
 
 test("starts a preview from the form and opens it", async ({ page, controller, branch, slug }) => {
     const commit = await controller.repository.push(branch);
 
-    await page.locator('input[name="org"]').fill("acme");
-    await page.locator('input[name="repo"]').fill("demo");
-    await page.locator('input[name="branch"]').fill(branch);
+    await page.getByLabel("Organization").fill("acme");
+    await page.getByLabel("Repository").fill("demo");
+    await page.getByLabel("Branch").fill(branch);
     await page.getByRole("button", { name: "Start" }).click();
 
     await expect(page.getByRole("heading", { name: slug })).toBeVisible();
     await expectStatus(page, "running");
-    await expect(page.locator(".facts code")).toHaveText(commit);
-    await expect(page.locator(".link-buttons a")).toHaveText(["Site", "Admin"]);
+    await expect(page.locator("dd code")).toHaveText(commit);
+    await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
 
     await page.getByRole("link", { name: "Site" }).click();
     await expect(page.locator("body")).toContainText('"version":"v1"');
 });
 
 test("an invalid branch is reported in the form", async ({ page }) => {
-    await page.locator('input[name="org"]').fill("acme");
-    await page.locator('input[name="repo"]').fill("demo");
-    await page.locator('input[name="branch"]').fill("-not-a-branch");
+    await page.getByLabel("Organization").fill("acme");
+    await page.getByLabel("Repository").fill("demo");
+    await page.getByLabel("Branch").fill("-not-a-branch");
     await page.getByRole("button", { name: "Start" }).click();
 
-    await expect(page.locator(".error")).toHaveText('Invalid branch "-not-a-branch"');
+    await expect(page.getByRole("alert")).toHaveText('Invalid branch "-not-a-branch"');
 });
 
 test("proxies every host of a preview without the session cookie", async ({ api, controller, branch }) => {
@@ -63,7 +60,7 @@ test("a stopped preview starts again when it is opened", async ({ page, api, con
     await expectStatus(page, "running");
 
     await page.getByRole("button", { name: "Stop" }).click();
-    await expect(page.locator(".facts .badge")).toHaveText("stopped");
+    await expectStatus(page, "stopped");
 
     // The page shown meanwhile reloads itself until the preview is back.
     await page.goto(previewUrl(slug));
@@ -77,11 +74,11 @@ test("deleting asks first and removes the checkout", async ({ page, api, control
     await api.request(`/api/previews/${slug}/stop`, { method: "POST" });
 
     await page.goto(`/previews/${slug}`);
-    page.once("dialog", (dialog) => void dialog.accept());
     await page.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
 
     await expect(page.getByRole("heading", { name: "Previews" })).toBeVisible();
-    expect(await api.preview(slug)).toBeUndefined();
+    await expect.poll(() => api.preview(slug)).toBeUndefined();
     expect(existsSync(join(controller.dataDir, "checkouts", slug))).toBe(false);
 });
 
@@ -91,8 +88,8 @@ test("a restart picks up new commits and only builds for them", async ({ page, a
     await expectStatus(page, "running");
 
     await page.getByRole("button", { name: "Restart" }).click();
-    await expectStatus(page, "running");
-    expect(await api.startLog(slug)).toContain("is still at");
+    await expect.poll(() => api.startLog(slug), { timeout: 90_000 }).toContain("is still at");
+    await waitFor(api, slug, "running");
 
     const commit = await controller.repository.push(branch, { "version.txt": "v2" });
     await page.getByRole("button", { name: "Restart" }).click();

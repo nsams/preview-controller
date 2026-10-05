@@ -1,4 +1,7 @@
 # Generated at runtime
 data
 package-lock.json
+# Built frontend
+frontend/dist
+# Playwright
 test-results

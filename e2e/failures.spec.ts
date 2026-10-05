@@ -15,7 +15,7 @@ test("a failed start is shown, not retried on its own, and started again by hand
 
     await controller.repository.push(branch, { fail: "" });
     await page.goto(`/previews/${slug}`);
-    await expect(page.locator(".card > .error")).toContainText("boom: dependency not found");
+    await expect(page.getByRole("alert")).toContainText("boom: dependency not found");
     await page.getByRole("button", { name: "Start" }).click();
     await waitFor(api, slug, "running");
 });
@@ -31,12 +31,13 @@ test("a crashing service is called out on the logs page", async ({ page, api, co
     // The preview as a whole is running, only one of its services is not.
     await waitFor(api, slug, "running");
 
+    // The page stops polling once nothing is starting or failing, which is the case until the worker exits.
     await page.goto(`/previews/${slug}/logs`);
     await expect(async () => {
         await page.reload();
-        await expect(page.locator(".card > .error")).toContainText("worker (exited (3))", { timeout: 500 });
+        await expect(page.getByRole("alert")).toContainText("worker (exited (3))", { timeout: 2_000 });
     }).toPass({ timeout: 30_000 });
 
-    await page.locator(".filters a.chip-failed").click();
+    await page.locator('[data-status="failed"]').click();
     await expect(page.locator("pre").last()).toContainText("worker crashed");
 });
