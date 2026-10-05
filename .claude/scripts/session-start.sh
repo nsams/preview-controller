@@ -51,15 +51,4 @@ if [ "$CLAUDE_CODE_REMOTE" = "true" ]; then
 fi
 
 
-# --- npm install (only when lockfile changed) ---
-cd "$CLAUDE_PROJECT_DIR"
-stamp=node_modules/.install-stamp
-hash=$(md5sum package-lock.json | awk '{print $1}')
-if [ ! -d node_modules ] || [ ! -f "$stamp" ] || [ "$(cat "$stamp")" != "$hash" ]; then
-    echo ">>> npm ci"
-    npm ci
-    echo "$hash" > "$stamp"
-fi
-
-
 exit 0
