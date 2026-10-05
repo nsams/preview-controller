@@ -37,6 +37,21 @@ test("an invalid branch is reported in the form", async ({ page }) => {
     await expect(page.getByRole("alert")).toHaveText('Invalid branch "-not-a-branch"');
 });
 
+test("a branch that cannot start is reported in the form, without creating a preview", async ({ page, api, controller, branch }) => {
+    await page.getByLabel("Organization").fill("acme");
+    await page.getByLabel("Repository").fill("demo");
+    await page.getByLabel("Branch").fill(branch);
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.getByRole("alert")).toContainText(`Branch "${branch}" does not exist`);
+
+    await controller.repository.push(branch);
+    await page.getByLabel("Start script").fill("missing.sh");
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.getByRole("alert")).toContainText('Start script "missing.sh" does not exist');
+
+    expect((await api.previews()).filter((preview) => preview.ref?.branch === branch)).toEqual([]);
+});
+
 test("proxies every host of a preview without the session cookie", async ({ api, controller, branch }) => {
     const slug = await startPreview(api, controller, branch);
     await waitFor(api, slug, "running");
