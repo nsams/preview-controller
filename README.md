@@ -233,7 +233,10 @@ single label under the base domain - see below.
   `<name>.<slug>.<baseDomain>` spelling is still routed, for projects that have not been changed
   over - but it is exactly what has no certificate.
 - **Starting** checks out the branch and runs the start script of the repository. That happens
-  in the background, the api returns right away.
+  in the background, the api returns right away. Before a new preview is created, a quick check -
+  `git ls-remote` and a fetch of the trees of the branch tip, without any file contents - makes
+  sure the repository and branch exist and the start script is there and executable. Otherwise
+  the form or the api answers with the error right away, and no preview is created.
 - **Idle previews** are stopped with `docker compose stop` after `idleTimeoutMinutes` without a
   request. Images and volumes stay, so the next start reuses them.
 - **Deleting a stopped preview** does the same as that sweep, on demand: the detail page of a
