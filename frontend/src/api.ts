@@ -88,7 +88,3 @@ export function describeRef(preview: Preview): string {
 export function previewPath(slug: string): string {
     return `/previews/${encodeURIComponent(slug)}`;
 }
-
-export function logsPath(slug: string, service?: string): string {
-    return service ? `${previewPath(slug)}/logs?service=${encodeURIComponent(service)}` : `${previewPath(slug)}/logs`;
-}

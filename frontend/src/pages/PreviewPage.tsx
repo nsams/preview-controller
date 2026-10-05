@@ -8,10 +8,11 @@ import Typography from "@mui/material/Typography";
 import { type ReactNode, useCallback, useState } from "react";
 import { useHistory, useParams } from "react-router-dom";
 
-import { describeRef, fetchPreview, fetchUsage, logsPath, type PreviewAction, type PreviewDetails, runAction, UnauthorizedError } from "../api.ts";
+import { describeRef, fetchPreview, fetchUsage, type PreviewAction, type PreviewDetails, runAction, UnauthorizedError } from "../api.ts";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
+import { PreviewLogs } from "../components/PreviewLogs.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
 import { formatCpu, formatDuration, formatMemory } from "../format.ts";
 import { usePolling } from "../usePolling.ts";
@@ -79,10 +80,6 @@ export function PreviewPage() {
     const header = (
         <PageHeader title={slug} trail={[{ label: "Previews", href: "/" }]}>
             {preview.data ? <StatusBadge status={preview.data.status} /> : null}
-            <FillSpace />
-            <Button href={logsPath(slug)} variant="textDark">
-                Logs
-            </Button>
         </PageHeader>
     );
 
@@ -140,49 +137,47 @@ export function PreviewPage() {
                 <ErrorMessage error={preview.error} />
                 <ErrorMessage error={actionError} />
 
-                <Paper variant="outlined" sx={{ p: 3 }}>
-                    <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", mb: 3 }}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
                         {data.links.map((link, index) => (
                             <Button key={link.url} href={link.url} variant={index === 0 ? "primary" : "outlined"} endIcon={<OpenNewTab />}>
                                 {link.name}
                             </Button>
                         ))}
+                        <FillSpace />
+                        {actions.map((button) => (
+                            <Tooltip key={button.action} title={button.title ?? ""}>
+                                <span>
+                                    <Button
+                                        variant={button.isDanger ? "destructive" : "outlined"}
+                                        startIcon={button.icon}
+                                        loading={runningAction === button.action}
+                                        loadingPosition="start"
+                                        disabled={runningAction !== undefined && runningAction !== button.action}
+                                        onClick={() => (button.action === "delete" ? setIsConfirmingDelete(true) : run(button.action))}
+                                    >
+                                        {button.label}
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        ))}
                     </Stack>
 
-                    <Box component="dl" sx={{ display: "grid", gridTemplateColumns: "max-content 1fr", columnGap: 3, rowGap: 1, m: 0 }}>
+                    <Box component="dl" sx={{ display: "flex", flexWrap: "wrap", columnGap: 4, rowGap: 1.5, mt: 2, mb: 0 }}>
                         {facts.map(([term, value]) => (
-                            <Box key={term} sx={{ display: "contents" }}>
-                                <Typography component="dt" variant="body2" color="text.secondary">
+                            <Box key={term} sx={{ minWidth: 0 }}>
+                                <Typography component="dt" variant="caption" color="text.secondary">
                                     {term}
                                 </Typography>
-                                <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                                <Typography component="dd" variant="body2" sx={{ m: 0, wordBreak: "break-word" }}>
                                     {value}
                                 </Typography>
                             </Box>
                         ))}
                     </Box>
-
-                    {actions.length > 0 ? (
-                        <Stack direction="row" spacing={1.5} sx={{ mt: 3 }}>
-                            {actions.map((button) => (
-                                <Tooltip key={button.action} title={button.title ?? ""}>
-                                    <span>
-                                        <Button
-                                            variant={button.isDanger ? "destructive" : "outlined"}
-                                            startIcon={button.icon}
-                                            loading={runningAction === button.action}
-                                            loadingPosition="start"
-                                            disabled={runningAction !== undefined && runningAction !== button.action}
-                                            onClick={() => (button.action === "delete" ? setIsConfirmingDelete(true) : run(button.action))}
-                                        >
-                                            {button.label}
-                                        </Button>
-                                    </span>
-                                </Tooltip>
-                            ))}
-                        </Stack>
-                    ) : null}
                 </Paper>
+
+                <PreviewLogs preview={data} />
             </Stack>
 
             <ConfirmDialog

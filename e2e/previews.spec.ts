@@ -115,30 +115,33 @@ test("a restart picks up new commits and only builds for them", async ({ page, a
     expect(JSON.parse((await api.request(previewUrl(slug))).body).version).toBe("v2");
 });
 
-test("the logs page shows the start and the containers", async ({ page, api, controller, branch, slug }) => {
+test("the detail page shows the start and the containers", async ({ page, api, controller, branch, slug }) => {
     await startPreview(api, controller, branch);
     await waitFor(api, slug, "running");
 
-    await page.goto(`/previews/${slug}/logs`);
-    await expect(page.locator("pre").first()).toContainText("building v1");
-    await expect(page.locator("pre").last()).toContainText("fixture app v1 listening");
+    await page.goto(`/previews/${slug}`);
+    await expect(page.locator("pre")).toContainText("building v1");
+    await page.getByRole("tab", { name: "All containers" }).click();
+    await expect(page.locator("pre")).toContainText("fixture app v1 listening");
 });
 
-test("the logs page follows the logs while it is open", async ({ page, api, controller, branch, slug }) => {
+test("the logs are streamed while the detail page is open", async ({ page, api, controller, branch, slug }) => {
     await startPreview(api, controller, branch);
     await waitFor(api, slug, "running");
 
-    await page.goto(`/previews/${slug}/logs`);
+    // A restart clears the start log and writes it anew, which shows up without a reload.
+    await page.goto(`/previews/${slug}`);
+    await expect(page.locator("pre")).toContainText("building v1");
+    await api.request(`/api/previews/${slug}/restart`, { method: "POST" });
+    await expect(page.locator("pre")).toContainText("is still at", { timeout: 90_000 });
+    await expect(page.locator("pre")).toContainText("is up on port", { timeout: 90_000 });
+    await expect(page.locator("pre")).not.toContainText("building v1");
+    await waitFor(api, slug, "running");
+
+    await page.getByRole("tab", { name: "All containers" }).click();
     await expect(page.getByTestId("container-log-state")).toHaveText("live");
     await api.request(`${previewUrl(slug)}/followed-live`);
-    await expect(page.locator("pre").last()).toContainText("fixture app served /followed-live");
-
-    // A restart clears the start log and writes it anew, which shows up without a reload too.
-    await expect(page.locator("pre").first()).toContainText("building v1");
-    await api.request(`/api/previews/${slug}/restart`, { method: "POST" });
-    await expect(page.locator("pre").first()).toContainText("is still at", { timeout: 90_000 });
-    await expect(page.locator("pre").first()).toContainText("is up on port", { timeout: 90_000 });
-    await expect(page.locator("pre").first()).not.toContainText("building v1");
+    await expect(page.locator("pre")).toContainText("fixture app served /followed-live");
 });
 
 test("the logs only follow while follow is switched on", async ({ page, api, controller, branch, slug }) => {
@@ -150,10 +153,10 @@ test("the logs only follow while follow is switched on", async ({ page, api, con
         }
     };
 
-    await page.goto(`/previews/${slug}/logs`);
+    await page.goto(`/previews/${slug}?log=containers`);
     await expect(page.getByTestId("container-log-state")).toHaveText("live");
-    const log = page.locator("pre").last();
-    const follow = page.getByRole("switch", { name: "Follow" }).last();
+    const log = page.locator("pre");
+    const follow = page.getByRole("switch", { name: "Follow" });
     const distanceFromBottom = () => log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight);
 
     await expect(follow).toBeChecked();

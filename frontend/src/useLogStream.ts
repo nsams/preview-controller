@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 const maxLength = 512 * 1024;
 
 export type LogStreamState = {
-    text: string;
+    /** Undefined until the log of the current url arrived, so that a switch never shows the previous one. */
+    text?: string;
     /** Whether the log is being received, or the browser is reconnecting to it. */
     isConnected: boolean;
     /** The server ended the log, for container logs because no container is running anymore. */
@@ -27,7 +28,11 @@ function trim(text: string): string {
  * an append adds to it. A new url, or a new restartKey, opens the stream again. Undefined closes it.
  */
 export function useLogStream(url: string | undefined, restartKey?: string): LogStreamState {
-    const [state, setState] = useState<LogStreamState>({ text: "", isConnected: false, hasEnded: false });
+    const [state, setState] = useState<Omit<LogStreamState, "text"> & { text: string; textUrl?: string }>({
+        text: "",
+        isConnected: false,
+        hasEnded: false,
+    });
 
     useEffect(() => {
         if (!url) {
@@ -37,7 +42,7 @@ export function useLogStream(url: string | undefined, restartKey?: string): LogS
         const read = (event: Event) => JSON.parse((event as MessageEvent<string>).data) as string;
 
         source.addEventListener("open", () => setState((previous) => ({ ...previous, isConnected: true, error: undefined })));
-        source.addEventListener("reset", (event) => setState((previous) => ({ ...previous, text: trim(read(event)) })));
+        source.addEventListener("reset", (event) => setState((previous) => ({ ...previous, text: trim(read(event)), textUrl: url })));
         source.addEventListener("append", (event) => setState((previous) => ({ ...previous, text: trim(previous.text + read(event)) })));
         source.addEventListener("end", () => {
             // Closed before the browser takes the end of the response for something to reconnect to.
@@ -54,9 +59,10 @@ export function useLogStream(url: string | undefined, restartKey?: string): LogS
 
         return () => {
             source.close();
-            setState((previous) => ({ ...previous, isConnected: false, hasEnded: false }));
+            setState((previous) => ({ ...previous, isConnected: false, hasEnded: false, error: undefined }));
         };
     }, [url, restartKey]);
 
-    return state;
+    const { text, textUrl, ...rest } = state;
+    return { ...rest, text: textUrl === url ? text : undefined };
 }

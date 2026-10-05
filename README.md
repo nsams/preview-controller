@@ -68,7 +68,7 @@ So:
 
 ## Api
 
-The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
+The ui is the react frontend (see below) at `/` and `/previews/<slug>`.
 It works with the same json api a script would use:
 
 | Method   | Path                                                   | Description                                                    |
@@ -117,8 +117,14 @@ types. A route only shows up in that type when it is chained onto the others.
 
 ```bash
 npm run build          # writes frontend/dist, which npm start serves
-npm run dev:frontend   # vite with hot reloading, next to npm run dev
+npm run dev            # controller with --watch and vite with hot reloading, in dev-process-manager
+npm run dev:backend    # only the controller
+npm run dev:frontend   # only vite
 ```
+
+`npm run dev` starts both scripts from [dev-pm.config.ts](dev-pm.config.ts) in a background daemon
+and returns. `npx dev-pm logs`, `npx dev-pm restart backend` and `npx dev-pm shutdown` work with
+them afterwards.
 
 Open the dev server as `http://preview.localhost:5173/` - with the base domain, not `localhost`.
 The session cookie is set on the base domain and cookies ignore the port, so the dev server shares
@@ -141,8 +147,10 @@ npm run lint:fix   # eslint --fix and prettier --write
 
 ## Logs
 
-Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from
-the page shown when a start failed. It has two parts:
+The detail page of a preview, `/previews/<slug>`, shows its logs below the links, facts and
+actions. It is linked from the status page and from the page shown when a start failed. The logs
+are one card with a tab for each source - the start log first, set apart by a line, then the
+containers:
 
 - the **start log**, what the controller did while checking out, installing, rendering the
   site-configs and running compose, including the error if one of those steps failed. The output
@@ -154,15 +162,17 @@ the page shown when a start failed. It has two parts:
   for that window only, because compose recreates only the containers that actually changed and
   the ones it leaves alone would otherwise still carry the output of the run before. A preview
   that was already running when the controller came up has no such cut-off and shows everything.
-  Each service is a chip above the log, coloured by the state of its containers: red for a
-  failing one, amber while it is still coming up, grey once it has exited cleanly. A failing
+  Every service has a tab of its own next to "All containers", coloured by the state of its
+  containers: red for a failing one, amber while it is still coming up. A failing
   service also spells its state out next to its name (`exited (1)`, `restarting (exit 1)`,
-  `unhealthy`) and is listed above the chips, because a container that keeps crashing is
+  `unhealthy`) and is listed above the tabs, because a container that keeps crashing is
   restarted by compose - the preview as a whole stays "running" while one of its services never
   comes up.
 
-Both logs are streamed live while the page is open: new lines show up as they are written, and
-the view stays at the bottom unless it was scrolled up. The start log follows the log file the
+The log of the selected tab is streamed live while the page is open: new lines show up as they
+are written. With **Follow** switched on - the default - the view keeps scrolling to the end;
+switched off, it stays where it is while the output keeps coming in. Scrolling up switches it off,
+scrolling back down to the end switches it on again. The start log follows the log file the
 controller writes, so a restart clears it and fills it again in place. The container log is
 `docker compose logs --follow`, which compose ends once no container of the preview is running;
 the page opens it again as soon as the preview or one of its services comes back up.
