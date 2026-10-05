@@ -17,7 +17,7 @@
         "lint:prettier": "npx prettier --check .",
         "lint:tsc": "tsc --noEmit",
         "lint:tsc-frontend": "tsc --noEmit -p frontend && tsc --noEmit -p frontend/tsconfig.node.json",
-        "prepare": "husky",
+        "prepare": "husky && skills-npm",
         "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
         "test": "node --test 'src/**/*.test.ts'",
         "test:e2e": "npm run build && playwright test"
@@ -61,6 +61,7 @@
         "lint-staged": "^17.6.0",
         "npm-run-all2": "^9.0.3",
         "prettier": "^3.9.8",
+        "skills-npm": "^4.0.0",
         "typescript": "^5.9.3",
         "vite": "^8.3.2"
     },

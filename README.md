@@ -144,6 +144,14 @@ npm run lint       # all checks
 npm run lint:fix   # eslint --fix and prettier --write
 ```
 
+## Agent skills
+
+[skills-npm](https://github.com/antfu/skills-npm) runs on `npm install` (in the `prepare` script)
+and symlinks the agent skills shipped by installed dependencies, currently `dev-pm` from
+`dev-process-manager`, into `.claude/skills` and `.agents/skills`. The links point into
+`node_modules` and are committed together with `skills-npm-lock.json`, which lists the skills it
+manages. A dependency upgrade that adds or drops a skill updates both on the next install.
+
 ## Logs
 
 Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from

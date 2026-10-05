@@ -5,3 +5,4 @@ package-lock.json
 frontend/dist
 # Playwright
 test-results
+skills-npm-lock.json

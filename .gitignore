@@ -11,7 +11,7 @@ frontend/dist
 .playwright-cli/
 
 # Installed by .claude/scripts/session-start.sh
-.claude/skills/
+.claude/skills/playwright-cli/
 
 # Playwright
 test-results/
