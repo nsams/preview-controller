@@ -115,13 +115,14 @@ test("a restart picks up new commits and only builds for them", async ({ page, a
     expect(JSON.parse((await api.request(previewUrl(slug))).body).version).toBe("v2");
 });
 
-test("the logs page shows the start and the containers", async ({ page, api, controller, branch, slug }) => {
+test("the detail page shows the start and the containers", async ({ page, api, controller, branch, slug }) => {
     await startPreview(api, controller, branch);
     await waitFor(api, slug, "running");
 
-    await page.goto(`/previews/${slug}/logs`);
-    await expect(page.locator("pre").first()).toContainText("building v1");
-    await expect(page.locator("pre").last()).toContainText("fixture app v1 listening");
+    await page.goto(`/previews/${slug}`);
+    await expect(page.locator("pre")).toContainText("building v1");
+    await page.getByRole("tab", { name: "All containers" }).click();
+    await expect(page.locator("pre")).toContainText("fixture app v1 listening");
 });
 
 test("a restarted controller finds its previews again", async ({ api, controller, branch }) => {

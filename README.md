@@ -68,7 +68,7 @@ So:
 
 ## Api
 
-The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
+The ui is the react frontend (see below) at `/` and `/previews/<slug>`.
 It works with the same json api a script would use:
 
 | Method   | Path                                                   | Description                                                    |
@@ -146,8 +146,10 @@ npm run lint:fix   # eslint --fix and prettier --write
 
 ## Logs
 
-Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from
-the page shown when a start failed. It has two parts:
+The detail page of a preview, `/previews/<slug>`, shows its logs below the links, facts and
+actions. It is linked from the status page and from the page shown when a start failed. The logs
+are one card with a tab for each source - the start log first, set apart by a line, then the
+containers:
 
 - the **start log**, what the controller did while checking out, installing, rendering the
   site-configs and running compose, including the error if one of those steps failed. The output
@@ -159,10 +161,10 @@ the page shown when a start failed. It has two parts:
   for that window only, because compose recreates only the containers that actually changed and
   the ones it leaves alone would otherwise still carry the output of the run before. A preview
   that was already running when the controller came up has no such cut-off and shows everything.
-  Each service is a chip above the log, coloured by the state of its containers: red for a
-  failing one, amber while it is still coming up, grey once it has exited cleanly. A failing
+  Every service has a tab of its own next to "All containers", coloured by the state of its
+  containers: red for a failing one, amber while it is still coming up. A failing
   service also spells its state out next to its name (`exited (1)`, `restarting (exit 1)`,
-  `unhealthy`) and is listed above the chips, because a container that keeps crashing is
+  `unhealthy`) and is listed above the tabs, because a container that keeps crashing is
   restarted by compose - the preview as a whole stays "running" while one of its services never
   comes up.
 

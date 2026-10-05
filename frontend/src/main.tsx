@@ -8,7 +8,6 @@ import { IntlProvider } from "react-intl";
 import { Route, Switch } from "react-router-dom";
 
 import { Layout } from "./components/Layout.tsx";
-import { LogsPage } from "./pages/LogsPage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { PreviewPage } from "./pages/PreviewPage.tsx";
 import { PreviewsPage } from "./pages/PreviewsPage.tsx";
@@ -34,9 +33,6 @@ createRoot(root).render(
                             </Route>
                             <Route path="/previews/:slug" exact>
                                 <PreviewPage />
-                            </Route>
-                            <Route path="/previews/:slug/logs" exact>
-                                <LogsPage />
                             </Route>
                             <Route>
                                 <NotFoundPage />

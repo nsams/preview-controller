@@ -72,7 +72,7 @@ export function startingPage(preview: Preview, controllerUrl: string): string {
         `<h1>Starting the preview</h1>
         <p class="lead">
             <a href="${escapeHtml(controllerUrl)}">all previews</a> &middot;
-            <a href="${escapeHtml(controllerUrl)}${logsPath(preview.slug)}">logs</a> &middot;
+            <a href="${escapeHtml(controllerUrl)}${previewPath(preview.slug)}">logs</a> &middot;
             ${escapeHtml(describeRef(preview))}
         </p>
         <div class="card">
@@ -94,7 +94,7 @@ export function failedPage(preview: Preview, controllerUrl: string): string {
         <div class="card">
             <p class="error">${escapeHtml(preview.error ?? "Unknown error")}</p>
             <p>
-                <a href="${escapeHtml(controllerUrl)}${logsPath(preview.slug)}">Show the full log</a>.
+                <a href="${escapeHtml(controllerUrl)}${previewPath(preview.slug)}">Show the full log</a>.
                 Reloading this page changes nothing - a failed preview is only started again from its
                 <a href="${escapeHtml(controllerUrl)}${previewPath(preview.slug)}">detail page</a>.
             </p>
@@ -124,8 +124,4 @@ export function cannotOpenPage(message: string): string {
 /** Routes of the frontend, linked from the pages above. */
 function previewPath(slug: string): string {
     return `/previews/${encodeURIComponent(slug)}`;
-}
-
-function logsPath(slug: string): string {
-    return `/previews/${encodeURIComponent(slug)}/logs`;
 }
