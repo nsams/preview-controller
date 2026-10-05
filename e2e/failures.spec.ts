@@ -41,5 +41,5 @@ test("a crashing service is called out on the detail page", async ({ page, api, 
     }).toPass({ timeout: 30_000 });
 
     await page.locator('[data-status="failed"]').click();
-    await expect(page.locator("pre").last()).toContainText("worker crashed");
+    await expect(page.locator("pre")).toContainText("worker crashed");
 });

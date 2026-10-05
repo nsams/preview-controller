@@ -1,45 +1,76 @@
+import TerminalIcon from "@mui/icons-material/Terminal";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip, { type ChipProps } from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useSearchParams } from "react-router";
 
-import { fetchContainerLog, fetchServices, fetchStartLog, logsPath, type PreviewDetails, type ServiceState } from "../api.ts";
+import { fetchContainerLog, fetchServices, fetchStartLog, type PreviewDetails, previewPath, type ServiceState } from "../api.ts";
 import { usePolling } from "../usePolling.ts";
 import { ErrorMessage } from "./ErrorMessage.tsx";
 import { LogView } from "./LogView.tsx";
 
 const tail = 200;
 
-const chipColors: Record<ServiceState["status"], ChipProps["color"]> = {
-    running: "default",
-    starting: "warning",
-    failed: "error",
-    stopped: "default",
+const tabColors: Record<ServiceState["status"], string | undefined> = {
+    running: undefined,
+    starting: "warning.main",
+    failed: "error.main",
+    stopped: undefined,
 };
 
-/** Start log and container logs of a preview, the lower part of its detail page. */
+/**
+ * Which log is shown, kept in the url: the start log without a parameter, the containers with
+ * ?log=containers, a single service with ?service=<name> - which is what the old logs page used.
+ */
+type Selection = { source: "start" } | { source: "containers"; service?: string };
+
+function readSelection(params: URLSearchParams): Selection {
+    const service = params.get("service");
+    if (service) {
+        return { source: "containers", service };
+    }
+    return params.get("log") === "containers" ? { source: "containers" } : { source: "start" };
+}
+
+function selectionPath(slug: string, selection: Selection): string {
+    if (selection.source === "start") {
+        return previewPath(slug);
+    }
+    return selection.service ? `${previewPath(slug)}?service=${encodeURIComponent(selection.service)}` : `${previewPath(slug)}?log=containers`;
+}
+
+function tabValue(selection: Selection): string {
+    return selection.source === "start" ? "start" : `service:${selection.service ?? ""}`;
+}
+
+/** The start log and the container logs of a preview as tabs of one card, the lower part of its detail page. */
 export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
     const { slug } = preview;
-    const service = useSearchParams()[0].get("service") ?? undefined;
+    const [searchParams] = useSearchParams();
+    const selection = readSelection(searchParams);
+    const { source } = selection;
+    const service = selection.source === "containers" ? selection.service : undefined;
+    const shown = tabValue(selection);
 
+    // Only the log on screen is fetched, the services are needed for the tabs either way.
     const load = useCallback(async () => {
-        const [services, startLog, containerLog] = await Promise.all([
+        const [services, log] = await Promise.all([
             fetchServices(slug),
-            fetchStartLog(slug),
-            // The container log failing is shown in its place, the rest of the page is still worth seeing.
-            fetchContainerLog(slug, { tail, service }).then(
+            // The log failing is shown in its place, the tabs are still worth seeing.
+            (source === "start" ? fetchStartLog(slug) : fetchContainerLog(slug, { tail, service })).then(
                 (text) => ({ text, error: undefined }),
                 (error: unknown) => ({ text: "", error }),
             ),
         ]);
-        return { services, startLog, containerLog };
-    }, [slug, service]);
+        return { services, log, shown };
+    }, [slug, source, service, shown]);
 
     // A preview that is still starting - or a container that is still crashing - is where the
     // interesting output is still coming in. Otherwise the log stays put while it is being read.
@@ -62,29 +93,27 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
         );
     }
 
-    const { services, startLog, containerLog } = data;
+    const { services } = data;
+    // Right after switching tabs the previous log is still loaded, which is not shown under the new tab.
+    const log = data.shown === shown ? data.log : undefined;
     // The preview as a whole still counts as running while one of its containers keeps crashing,
     // so the failing ones are called out above the log instead of only being coloured in.
     const failed = services.filter((candidate) => candidate.status === "failed");
+    const emptyText =
+        source === "start"
+            ? "The controller has not started this preview yet."
+            : preview.containerLogsSinceLastStart
+              ? "No container output since the last start."
+              : "No container output.";
 
     return (
         <Stack spacing={2}>
             <ErrorMessage error={logs.error} />
 
             <Paper variant="outlined" sx={{ p: 2.5 }}>
-                <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 1.5 }}>
-                    Start log
-                </Typography>
-                <LogView>{startLog.trim() || "The controller has not started this preview yet."}</LogView>
-            </Paper>
-
-            <Paper variant="outlined" sx={{ p: 2.5 }}>
-                <Stack direction="row" sx={{ alignItems: "baseline", mb: 1.5 }}>
+                <Stack direction="row" sx={{ alignItems: "center", mb: 1 }}>
                     <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                        Containers
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                        last {tail} lines{preview.containerLogsSinceLastStart ? " since the last start" : ""}
+                        Logs
                     </Typography>
                     <Box sx={{ flex: 1 }} />
                     {isLive ? null : (
@@ -102,40 +131,50 @@ export function PreviewLogs({ preview }: { preview: PreviewDetails }) {
                     </Alert>
                 ) : null}
 
-                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.5 }}>
-                    <Chip
-                        label="all services"
+                <Tabs
+                    value={shown}
+                    variant="scrollable"
+                    allowScrollButtonsMobile
+                    sx={{ minHeight: 40, borderBottom: 1, borderColor: "divider", "& .MuiTab-root": { minHeight: 40, textTransform: "none" } }}
+                >
+                    {/* What the controller did is a log of its own, set apart from the containers by a line. */}
+                    <Tab
+                        value="start"
+                        label="Start log"
+                        icon={<TerminalIcon fontSize="small" />}
+                        iconPosition="start"
                         component={RouterLink}
-                        to={logsPath(slug)}
-                        clickable
-                        color={service ? "default" : "primary"}
-                        variant={service ? "outlined" : "filled"}
+                        to={selectionPath(slug, { source: "start" })}
+                        sx={{ borderRight: 1, borderColor: "divider", mr: 1, fontWeight: 600 }}
                     />
+                    <Tab value="service:" label="All containers" component={RouterLink} to={selectionPath(slug, { source: "containers" })} />
                     {services.map(({ name, status, detail }) => (
-                        <Chip
+                        <Tab
                             key={name}
+                            value={`service:${name}`}
                             // A service that is simply running needs no second label - only the others get one.
                             label={status === "running" ? name : `${name} · ${detail}`}
                             title={`${name}: ${detail}`}
                             component={RouterLink}
-                            to={logsPath(slug, name)}
-                            clickable
-                            color={service === name && status === "running" ? "primary" : chipColors[status]}
-                            variant={service === name ? "filled" : "outlined"}
+                            to={selectionPath(slug, { source: "containers", service: name })}
+                            sx={{ color: tabColors[status], "&.Mui-selected": { color: tabColors[status] } }}
                             data-status={status}
                         />
                     ))}
-                </Stack>
+                </Tabs>
 
-                {containerLog.error ? (
+                <Typography variant="body2" color="text.secondary" sx={{ my: 1.5 }}>
+                    {source === "start"
+                        ? "What the controller did on the last start: checkout, install and compose."
+                        : `Container output, last ${tail} lines${preview.containerLogsSinceLastStart ? " since the last start" : ""}.`}
+                </Typography>
+
+                {log?.error ? (
                     <Box sx={{ mb: 1.5 }}>
-                        <ErrorMessage error={containerLog.error} />
+                        <ErrorMessage error={log.error} />
                     </Box>
                 ) : null}
-                <LogView>
-                    {containerLog.text.trim() ||
-                        (preview.containerLogsSinceLastStart ? "No container output since the last start." : "No container output.")}
-                </LogView>
+                {log ? <LogView>{log.text.trim() || emptyText}</LogView> : <Skeleton height={120} variant="rounded" />}
             </Paper>
         </Stack>
     );
