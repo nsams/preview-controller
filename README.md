@@ -97,6 +97,19 @@ the session of the controller, and vite passes `/api` and the login on to the co
 host header unchanged, which is how the controller knows they are meant for itself and not for a
 preview.
 
+## Linting
+
+The lint setup follows the [Dextinity starter](https://github.com/vivid-planet/dextinity-starter):
+prettier, eslint with `@dextinity/eslint-config` (the node config for the controller, the react
+config without the admin and translation rules for the frontend), knip for unused files, exports
+and dependencies, and tsc for both sides. `npm install` sets up a husky pre-commit hook that runs
+lint-staged, and the lint workflow runs the same checks on every pull request.
+
+```bash
+npm run lint       # all checks
+npm run lint:fix   # eslint --fix and prettier --write
+```
+
 ## Logs
 
 Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from

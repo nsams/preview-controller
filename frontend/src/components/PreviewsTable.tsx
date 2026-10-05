@@ -8,7 +8,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
-import { describeRef, logsPath, previewPath, type ContainerUsage, type Preview } from "../api.ts";
+import { type ContainerUsage, describeRef, logsPath, type Preview, previewPath } from "../api.ts";
 import { formatCpu, formatDuration, formatMemory } from "../format.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 

@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 
 import { run } from "./exec.ts";
-import { validateRepositoryRef, type RepositoryRef } from "./repository.ts";
+import { type RepositoryRef, validateRepositoryRef } from "./repository.ts";
 
 export type Checkout = {
     ref: RepositoryRef;
