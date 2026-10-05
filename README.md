@@ -45,6 +45,27 @@ The response contains the url the preview will be reachable at. The first start 
 branch and builds the images, which takes a few minutes; opening the url in the meantime shows
 a page that reloads itself until the preview is up, with a link to its log.
 
+## Security
+
+Only use the controller for repositories you trust. Starting a preview means running
+`start-preview.sh` of that repository and building and running its docker compose stack on the
+host - code from the repository, executed with the rights of the controller and with access to
+the docker daemon, which is as good as root on the host. Nothing is sandboxed: a malicious or
+compromised branch can read the other previews, the checkouts, the GitHub token and anything else
+the host can reach.
+
+So:
+
+- Only make repositories previewable whose every branch you would also run on your own machine.
+  Do not point it at repositories where outsiders can push branches, and do not preview pull
+  requests from forks.
+- Scope `PREVIEW_CONTROLLER_GITHUB_TOKEN` to exactly those repositories (see
+  [Private repositories](#private-repositories)) - there is no allow-list beyond what the token
+  can read.
+- Treat the password as access to the host. Anyone who has it can start a preview of any
+  repository the token or the host can reach.
+- Run the controller on a host dedicated to previews, not next to anything that matters.
+
 ## Api
 
 The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
@@ -233,11 +254,24 @@ single label under the base domain - see below.
   domain, which makes it valid for all preview subdomains including iframes. The cookie is
   stripped again before a request is passed to a preview.
 
-## What a project has to provide
+## Requirements for previewed apps
 
-The controller knows nothing about the projects it starts. A repository only has to contain an
-executable `start-preview.sh` in its root that leaves a running docker compose project behind.
-It is called with these environment variables:
+The controller knows nothing about the projects it starts. A repository can be previewed when it
+
+- has an executable **`start-preview.sh`** in its root. The controller runs it on every start
+  that needs a build; it does whatever the project needs and leaves a running stack behind.
+- runs as a **docker compose** project, created under the name the controller hands over in
+  `COMPOSE_PROJECT_NAME` and configured from the `PREVIEW_*` variables below. Stopping,
+  restarting, logs and deletion all go through `docker compose -p <project>`, so containers
+  started any other way are invisible to the controller and are never cleaned up.
+- **publishes a single port**, `PREVIEW_PORT`, best bound to `127.0.0.1` because only the
+  controller has to reach it (`ports: ["127.0.0.1:${PREVIEW_PORT}:80"]`). All traffic of a preview - site,
+  admin, api, idp and whatever else - arrives on that one port, so a project with more than one
+  service puts a reverse proxy such as [caddy](https://caddyserver.com/) or traefik in front
+  that routes by host name (`admin--$PREVIEW_HOST`, …) to the containers inside the stack. Any
+  other published port would collide with the next preview.
+
+`start-preview.sh` is called with these environment variables:
 
 | Variable               | Meaning                                                        |
 | ---------------------- | -------------------------------------------------------------- |
