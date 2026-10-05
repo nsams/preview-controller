@@ -3,15 +3,24 @@ import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 
 import type { Config } from "./config.ts";
-import { composeDown, composeLogs, composeRestart, composeServiceStates, composeStart, composeStop, discoverComposeProjects } from "./docker.ts";
-import type { ComposeProjectState, ServiceState } from "./docker.ts";
+import {
+    composeDown,
+    composeLogs,
+    type ComposeProjectState,
+    composeRestart,
+    composeServiceStates,
+    composeStart,
+    composeStop,
+    discoverComposeProjects,
+    type ServiceState,
+} from "./docker.ts";
 import { describeError, runStreaming } from "./exec.ts";
-import { checkoutBranch, readCheckout, type Checkout } from "./git.ts";
-import { createSlug, defaultStartScript, normalizeScript, repositoryUrl, validateRepositoryRef, type RepositoryRef } from "./repository.ts";
+import { type Checkout, checkoutBranch, readCheckout } from "./git.ts";
+import { createSlug, defaultStartScript, normalizeScript, type RepositoryRef, repositoryUrl, validateRepositoryRef } from "./repository.ts";
 
-export type PreviewStatus = "stopped" | "starting" | "running" | "failed";
+type PreviewStatus = "stopped" | "starting" | "running" | "failed";
 
-export type PreviewUrl = {
+type PreviewUrl = {
     name: string;
     url: string;
 };

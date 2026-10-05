@@ -1,4 +1,4 @@
-import { DetailedError, hc, parseResponse, type ClientResponse } from "hono/client";
+import { type ClientResponse, DetailedError, hc, parseResponse } from "hono/client";
 
 // Only the type crosses over, nothing of the server ends up in the bundle.
 import type { ApiType } from "../../src/api.ts";

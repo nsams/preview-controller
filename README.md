@@ -97,6 +97,19 @@ the session of the controller, and vite passes `/api` and the login on to the co
 host header unchanged, which is how the controller knows they are meant for itself and not for a
 preview.
 
+## Linting
+
+The lint setup follows the [Dextinity starter](https://github.com/vivid-planet/dextinity-starter):
+prettier, eslint with `@dextinity/eslint-config` (the node config for the controller, the react
+config without the admin and translation rules for the frontend), knip for unused files, exports
+and dependencies, and tsc for both sides. `npm install` sets up a husky pre-commit hook that runs
+lint-staged, and the lint workflow runs the same checks on every pull request.
+
+```bash
+npm run lint       # all checks
+npm run lint:fix   # eslint --fix and prettier --write
+```
+
 ## Logs
 
 Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from
@@ -283,6 +296,25 @@ The first entry is where the controller sends you after starting a preview. Only
 `https` urls are accepted, everything else in that file is ignored. The file stays in the
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
+
+## Tests
+
+```bash
+npm test                          # unit tests, src/*.test.ts
+npx playwright install chromium   # once
+npm run test:e2e                  # end-to-end tests, e2e/*.spec.ts
+```
+
+The unit tests use the test runner of node and need nothing else.
+
+The end-to-end tests build the frontend, start the real controller and drive it through http and
+a browser, so they need docker. They preview [e2e/fixture-project](e2e/fixture-project), a `start-preview.sh` with a
+compose file and an app that answers every request with what it received. Instead of GitHub, it is
+cloned from a bare repository on disk, through a git `insteadOf` rewrite in the environment of the
+controller. Every test pushes a branch of its own and deletes its previews afterwards. A chromium
+that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.github/workflows/test.yml).
 
 ## Limitations
 

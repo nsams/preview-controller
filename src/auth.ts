@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import type { Config } from "./config.ts";
 
-export const cookieName = "preview_controller_auth";
+const cookieName = "preview_controller_auth";
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
 
 function equals(a: string, b: string): boolean {
@@ -48,7 +48,7 @@ export function isSessionValid(config: Config, cookieHeader: string | undefined)
     return equals(sign(config, expiresAt), signature);
 }
 
-export function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
+function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
     for (const part of cookieHeader?.split(";") ?? []) {
         const [key, ...rest] = part.trim().split("=");
         if (key === name) {
