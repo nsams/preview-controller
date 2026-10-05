@@ -254,24 +254,11 @@ single label under the base domain - see below.
   domain, which makes it valid for all preview subdomains including iframes. The cookie is
   stripped again before a request is passed to a preview.
 
-## Requirements for previewed apps
+## What a project has to provide
 
-The controller knows nothing about the projects it starts. A repository can be previewed when it
-
-- has an executable **`start-preview.sh`** in its root. The controller runs it on every start
-  that needs a build; it does whatever the project needs and leaves a running stack behind.
-- runs as a **docker compose** project, created under the name the controller hands over in
-  `COMPOSE_PROJECT_NAME` and configured from the `PREVIEW_*` variables below. Stopping,
-  restarting, logs and deletion all go through `docker compose -p <project>`, so containers
-  started any other way are invisible to the controller and are never cleaned up.
-- **publishes a single port**, `PREVIEW_PORT`, best bound to `127.0.0.1` because only the
-  controller has to reach it (`ports: ["127.0.0.1:${PREVIEW_PORT}:80"]`). All traffic of a preview - site,
-  admin, api, idp and whatever else - arrives on that one port, so a project with more than one
-  service puts a reverse proxy such as [caddy](https://caddyserver.com/) or traefik in front
-  that routes by host name (`admin--$PREVIEW_HOST`, …) to the containers inside the stack. Any
-  other published port would collide with the next preview.
-
-`start-preview.sh` is called with these environment variables:
+The controller knows nothing about the projects it starts. A repository only has to contain an
+executable `start-preview.sh` in its root that leaves a running docker compose project behind.
+It is called with these environment variables:
 
 | Variable               | Meaning                                                        |
 | ---------------------- | -------------------------------------------------------------- |
