@@ -45,6 +45,27 @@ The response contains the url the preview will be reachable at. The first start 
 branch and builds the images, which takes a few minutes; opening the url in the meantime shows
 a page that reloads itself until the preview is up, with a link to its log.
 
+## Security
+
+Only use the controller for repositories you trust. Starting a preview means running
+`start-preview.sh` of that repository and building and running its docker compose stack on the
+host - code from the repository, executed with the rights of the controller and with access to
+the docker daemon, which is as good as root on the host. Nothing is sandboxed: a malicious or
+compromised branch can read the other previews, the checkouts, the GitHub token and anything else
+the host can reach.
+
+So:
+
+- Only make repositories previewable whose every branch you would also run on your own machine.
+  Do not point it at repositories where outsiders can push branches, and do not preview pull
+  requests from forks.
+- Scope `PREVIEW_CONTROLLER_GITHUB_TOKEN` to exactly those repositories (see
+  [Private repositories](#private-repositories)) - there is no allow-list beyond what the token
+  can read.
+- Treat the password as access to the host. Anyone who has it can start a preview of any
+  repository the token or the host can reach.
+- Run the controller on a host dedicated to previews, not next to anything that matters.
+
 ## Api
 
 The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
