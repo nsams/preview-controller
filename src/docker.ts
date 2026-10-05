@@ -1,4 +1,4 @@
-import { run } from "./exec.ts";
+import { run, runStreaming } from "./exec.ts";
 
 export type ContainerUsage = {
     containers: number;
@@ -37,8 +37,10 @@ export async function composeDown(project: string): Promise<void> {
     await compose(project, ["down", "--volumes", "--remove-orphans", "--rmi", "local"]);
 }
 
-export async function composeLogs(project: string, options: { tail: number; service?: string; sinceSeconds?: number }): Promise<string> {
-    const args = ["logs", "--no-color", "--timestamps", "--tail", String(options.tail)];
+type LogOptions = { tail: number; service?: string; sinceSeconds?: number };
+
+function logArgs(options: LogOptions, { shouldFollow = false } = {}): string[] {
+    const args = ["logs", "--no-color", "--timestamps", "--tail", String(options.tail), ...(shouldFollow ? ["--follow"] : [])];
     // Relative and not a timestamp: docker resolves it against its own clock, so the window does
     // not shift when the daemon runs in a vm whose clock drifts from the host - as on docker
     // desktop. It has to come before the service, which is positional.
@@ -48,7 +50,27 @@ export async function composeLogs(project: string, options: { tail: number; serv
     if (options.service) {
         args.push(options.service);
     }
-    return compose(project, args, 60_000);
+    return args;
+}
+
+export async function composeLogs(project: string, options: LogOptions): Promise<string> {
+    return compose(project, logArgs(options), 60_000);
+}
+
+/**
+ * The same as composeLogs, followed until the containers are gone or the signal aborts. Compose
+ * ends it on its own once no container of the project is running anymore. Without a timeout, a
+ * log page can stay open for as long as someone keeps reading it.
+ */
+export async function followComposeLogs(
+    project: string,
+    options: LogOptions & { onLine: (line: string) => void; signal: AbortSignal },
+): Promise<void> {
+    await runStreaming("docker", ["compose", "-p", project, ...logArgs(options, { shouldFollow: true })], {
+        onLine: options.onLine,
+        signal: options.signal,
+        timeoutMs: 0,
+    });
 }
 
 /** How a service of a preview is doing, as far as someone reading its logs cares. */

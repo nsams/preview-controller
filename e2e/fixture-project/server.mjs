@@ -9,6 +9,7 @@ createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", () => {
+        console.log(`fixture app served ${request.url}`);
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ version, url: request.url, headers: request.headers, body }));
     });

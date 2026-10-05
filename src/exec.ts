@@ -52,6 +52,8 @@ export async function run(command: string, args: string[], options: RunOptions =
 export type StreamOptions = RunOptions & {
     /** Called with every finished line, without its line break, while the command is still running. */
     onLine: (line: string) => void;
+    /** Kills the command, which then rejects with an AbortError. */
+    signal?: AbortSignal;
 };
 
 /**
@@ -66,6 +68,7 @@ export function runStreaming(command: string, args: string[], options: StreamOpt
             env: options.env ? { ...process.env, ...options.env } : process.env,
             timeout: options.timeoutMs ?? defaultTimeoutMs,
             stdio: ["ignore", "pipe", "pipe"],
+            signal: options.signal,
         });
 
         // The last lines stand in for the stderr that run reports on a failure.

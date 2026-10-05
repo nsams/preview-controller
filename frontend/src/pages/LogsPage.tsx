@@ -1,19 +1,19 @@
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Chip, { type ChipProps } from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { Link as RouterLink, useParams, useSearchParams } from "react-router";
 
-import { fetchContainerLog, fetchPreview, fetchServices, fetchStartLog, logsPath, previewPath, type ServiceState } from "../api.ts";
+import { containerLogStreamUrl, fetchPreview, fetchServices, logsPath, previewPath, type ServiceState, startLogStreamUrl } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
 import { LogView } from "../components/LogView.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
+import { useLogStream } from "../useLogStream.ts";
 import { usePolling } from "../usePolling.ts";
 
 const tail = 200;
@@ -29,30 +29,23 @@ export function LogsPage() {
     const slug = useParams().slug ?? "";
     const service = useSearchParams()[0].get("service") ?? undefined;
 
+    // The logs themselves are streamed, this only keeps the status and the services up to date.
     const load = useCallback(async () => {
-        const [preview, services, startLog, containerLog] = await Promise.all([
-            fetchPreview(slug),
-            fetchServices(slug),
-            fetchStartLog(slug),
-            // The container log failing is shown in its place, the rest of the page is still worth seeing.
-            fetchContainerLog(slug, { tail, service }).then(
-                (text) => ({ text, error: undefined }),
-                (error: unknown) => ({ text: "", error }),
-            ),
-        ]);
-        return { preview, services, startLog, containerLog };
-    }, [slug, service]);
-
-    // A preview that is still starting - or a container that is still crashing - is where the
-    // interesting output is still coming in. Otherwise the log stays put while it is being read.
-    const [isLive, setIsLive] = useState(true);
-    const logs = usePolling(load, isLive ? 10_000 : 0);
+        const [preview, services] = await Promise.all([fetchPreview(slug), fetchServices(slug)]);
+        return { preview, services };
+    }, [slug]);
+    const logs = usePolling(load, 5_000);
     const data = logs.data;
-    useEffect(() => {
-        if (data) {
-            setIsLive(data.preview.status === "starting" || data.services.some((candidate) => candidate.status === "failed"));
-        }
-    }, [data]);
+
+    const startLog = useLogStream(startLogStreamUrl(slug));
+    // Compose follows the containers that are there when it starts, so the stream is opened again
+    // whenever containers may have come or gone: when the preview changes its status, and when a
+    // service starts running again - after a crash, say, or once the stream ended with the
+    // containers. Not before the status is known, which would only open it twice.
+    const restartKey = data
+        ? [data.preview.status, ...data.services.filter((candidate) => candidate.status === "running").map(({ name }) => name)].join(" ")
+        : undefined;
+    const containerLog = useLogStream(restartKey === undefined ? undefined : containerLogStreamUrl(slug, { tail, service }), restartKey);
 
     const header = (
         <PageHeader
@@ -81,7 +74,7 @@ export function LogsPage() {
         );
     }
 
-    const { preview, services, startLog, containerLog } = data;
+    const { preview, services } = data;
     // The preview as a whole still counts as running while one of its containers keeps crashing,
     // so the failing ones are called out above the log instead of only being coloured in.
     const failed = services.filter((candidate) => candidate.status === "failed");
@@ -96,7 +89,7 @@ export function LogsPage() {
                     <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 1.5 }}>
                         Start log
                     </Typography>
-                    <LogView>{startLog.trim() || "The controller has not started this preview yet."}</LogView>
+                    <LogView>{startLog.text.trim() || "The controller has not started this preview yet."}</LogView>
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: 2.5 }}>
@@ -105,14 +98,12 @@ export function LogsPage() {
                             Containers
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                            last {tail} lines{preview.containerLogsSinceLastStart ? " since the last start" : ""}
+                            from {tail} lines back{preview.containerLogsSinceLastStart ? ", since the last start" : ""}
                         </Typography>
                         <Box sx={{ flex: 1 }} />
-                        {isLive ? null : (
-                            <Button size="small" onClick={logs.reload}>
-                                Reload
-                            </Button>
-                        )}
+                        <Typography variant="body2" color="text.secondary" data-testid="container-log-state">
+                            {containerLog.isConnected ? "live" : containerLog.hasEnded ? "no container running" : ""}
+                        </Typography>
                     </Stack>
 
                     {failed.length > 0 ? (

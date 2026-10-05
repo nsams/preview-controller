@@ -44,12 +44,17 @@ export function fetchServices(slug: string) {
     return call(client.previews[":slug"].services.$get({ param: { slug } }));
 }
 
-export function fetchStartLog(slug: string) {
-    return call(client.previews[":slug"].logs.$get({ param: { slug }, query: { source: "start" } }));
+/** Where the logs are streamed from, for an EventSource - see useLogStream. */
+function logStreamUrl(slug: string, query: Record<string, string>): string {
+    return `/api/previews/${encodeURIComponent(slug)}/logs/stream?${new URLSearchParams(query)}`;
 }
 
-export function fetchContainerLog(slug: string, { tail, service }: { tail: number; service?: string }) {
-    return call(client.previews[":slug"].logs.$get({ param: { slug }, query: { tail, service } }));
+export function startLogStreamUrl(slug: string): string {
+    return logStreamUrl(slug, { source: "start" });
+}
+
+export function containerLogStreamUrl(slug: string, { tail, service }: { tail: number; service?: string }): string {
+    return logStreamUrl(slug, { tail: String(tail), ...(service ? { service } : {}) });
 }
 
 /** Creates the preview if necessary and starts it in the background. */

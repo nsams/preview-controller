@@ -83,6 +83,7 @@ It works with the same json api a script would use:
 | `DELETE` | `/api/previews/:slug`                                  | Remove containers, volumes and the checkout                    |
 | `GET`    | `/api/previews/:slug/services`                         | The compose services of a preview and their state              |
 | `GET`    | `/api/previews/:slug/logs`                             | Start log or container logs as plain text                      |
+| `GET`    | `/api/previews/:slug/logs/stream`                      | The same, followed live as server-sent events                  |
 | `GET`    | `/api/usage`                                           | Cpu and memory of every running preview by slug                |
 
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
@@ -153,15 +154,27 @@ the page shown when a start failed. It has two parts:
   restarted by compose - the preview as a whole stays "running" while one of its services never
   comes up.
 
-The page keeps itself up to date while a preview is still starting, and while a container is failing. The
-same is available as plain text:
+Both logs are streamed live while the page is open: new lines show up as they are written, and
+the view stays at the bottom unless it was scrolled up. The start log follows the log file the
+controller writes, so a restart clears it and fills it again in place. The container log is
+`docker compose logs --follow`, which compose ends once no container of the preview is running;
+the page opens it again as soon as the preview or one of its services comes back up.
+
+The same is available as plain text:
 
 ```bash
 curl -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs?source=start"
 curl -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs?service=api&tail=500"
 ```
 
-`source` is `containers` (default) or `start`, `tail` defaults to 200 lines.
+`source` is `containers` (default) or `start`, `tail` defaults to 200 lines. With `/logs/stream`
+instead of `/logs` and the same parameters, the log is followed as server-sent events: a `reset`
+event with what is there already, an `append` event for every new piece of output, both with the
+text as a json string, and for the container log an `end` event once compose stops following.
+
+```bash
+curl -N -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs/stream?service=api"
+```
 
 ## Configuration
 

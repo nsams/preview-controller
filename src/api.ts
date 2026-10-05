@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import { validator } from "hono/validator";
 
 import { type ContainerUsage, readUsageByComposeProject } from "./docker.ts";
@@ -18,6 +19,24 @@ function parseLogQuery(value: Record<string, string | string[]>): { source?: "st
         source: value.source === "start" ? "start" : undefined,
         tail: Number.isInteger(tail) && tail > 0 && tail <= 5000 ? tail : undefined,
         service: servicePattern.test(service) ? service : undefined,
+    };
+}
+
+/** Often enough that no proxy in between closes a log nobody has written to for a while. */
+const keepAliveMs = 20_000;
+
+/**
+ * Sends the events one after the other, in the order they were handed over, without the caller
+ * having to wait for each of them. The data is json, so that line breaks and blank lines survive.
+ */
+function createSender(stream: SSEStreamingApi) {
+    let queue = Promise.resolve();
+    return {
+        send(event: "reset" | "append" | "end", text = ""): void {
+            queue = queue.then(() => stream.writeSSE({ event, data: JSON.stringify(text) })).catch(() => undefined);
+        },
+        /** Waits for everything sent so far, before the stream is closed. */
+        flush: () => queue,
     };
 }
 
@@ -189,6 +208,57 @@ export function createApi(registry: PreviewRegistry) {
                     } catch (error) {
                         return c.json(describe(error), 500);
                     }
+                },
+            )
+
+            /**
+             * The same logs as server-sent events, kept open and written to while they grow. Both
+             * begin with a reset that carries what is there already, followed by an append per new
+             * piece of output - the start log also sends a reset with nothing when a new start
+             * clears it. The container log ends with an end event once compose stops following,
+             * which is when no container is running anymore.
+             */
+            .get(
+                "/previews/:slug/logs/stream",
+                validator("query", (value) => parseLogQuery(value)),
+                (c) => {
+                    const slug = c.req.param("slug");
+                    if (!registry.get(slug)) {
+                        return c.json(unknown(slug), 404);
+                    }
+                    const { source = "containers", tail = 200, service } = c.req.valid("query");
+                    return streamSSE(c, async (stream) => {
+                        const { send, flush } = createSender(stream);
+                        const aborted = new AbortController();
+                        stream.onAbort(() => aborted.abort());
+                        const keepAlive = setInterval(() => void stream.write(": keep-alive\n\n").catch(() => undefined), keepAliveMs);
+                        try {
+                            if (source === "start") {
+                                const unfollow = await registry.followStartLog(slug, {
+                                    onReset: (text) => send("reset", text),
+                                    onAppend: (text) => send("append", text),
+                                });
+                                // The client may already be gone by the time the log is followed.
+                                if (!aborted.signal.aborted) {
+                                    await new Promise((resolve) => aborted.signal.addEventListener("abort", resolve, { once: true }));
+                                }
+                                unfollow();
+                                return;
+                            }
+                            send("reset");
+                            await registry
+                                .followContainerLogs(slug, { tail, service, signal: aborted.signal, onLine: (line) => send("append", `${line}\n`) })
+                                .catch((error: unknown) => {
+                                    if (!aborted.signal.aborted) {
+                                        send("append", `${describeError(error)}\n`);
+                                    }
+                                });
+                            send("end");
+                        } finally {
+                            clearInterval(keepAlive);
+                            await flush();
+                        }
+                    });
                 },
             )
 

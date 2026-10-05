@@ -109,6 +109,23 @@ test("the logs page shows the start and the containers", async ({ page, api, con
     await expect(page.locator("pre").last()).toContainText("fixture app v1 listening");
 });
 
+test("the logs page follows the logs while it is open", async ({ page, api, controller, branch, slug }) => {
+    await startPreview(api, controller, branch);
+    await waitFor(api, slug, "running");
+
+    await page.goto(`/previews/${slug}/logs`);
+    await expect(page.getByTestId("container-log-state")).toHaveText("live");
+    await api.request(`${previewUrl(slug)}/followed-live`);
+    await expect(page.locator("pre").last()).toContainText("fixture app served /followed-live");
+
+    // A restart clears the start log and writes it anew, which shows up without a reload too.
+    await expect(page.locator("pre").first()).toContainText("building v1");
+    await api.request(`/api/previews/${slug}/restart`, { method: "POST" });
+    await expect(page.locator("pre").first()).toContainText("is still at", { timeout: 90_000 });
+    await expect(page.locator("pre").first()).toContainText("is up on port", { timeout: 90_000 });
+    await expect(page.locator("pre").first()).not.toContainText("building v1");
+});
+
 test("a restarted controller finds its previews again", async ({ api, controller, branch }) => {
     const slug = await startPreview(api, controller, branch);
     const before = await waitFor(api, slug, "running");

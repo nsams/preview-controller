@@ -12,6 +12,7 @@ import {
     composeStart,
     composeStop,
     discoverComposeProjects,
+    followComposeLogs,
     type ServiceState,
 } from "./docker.ts";
 import { describeError, runStreaming } from "./exec.ts";
@@ -115,6 +116,8 @@ export class PreviewRegistry {
     private readonly logDir: string;
     /** One chain per preview, so that streamed output stays in the order it arrived in. */
     private readonly logWrites = new Map<string, Promise<void>>();
+    /** Whoever follows the start log of a preview, see followStartLog. */
+    private readonly logFollowers = new Map<string, Set<StartLogFollower>>();
     private readonly checkoutDir: string;
 
     constructor(config: Config) {
@@ -448,6 +451,27 @@ export class PreviewRegistry {
     }
 
     /**
+     * Hands over the start log as it is now and then everything written to it, until the returned
+     * function is called. The first part is read in the same chain the writes go through, so not
+     * a line can be missed or show up twice in between. A new start begins with onReset("").
+     */
+    async followStartLog(slug: string, follower: StartLogFollower, maxBytes = 64 * 1024): Promise<() => void> {
+        this.require(slug);
+        const followers = this.logFollowers.get(slug) ?? new Set();
+        this.logFollowers.set(slug, followers);
+        await this.enqueueLogWrite(slug, async () => {
+            follower.onReset(await this.readStartLog(slug, maxBytes));
+            followers.add(follower);
+        });
+        return () => {
+            followers.delete(follower);
+            if (followers.size === 0 && this.logFollowers.get(slug) === followers) {
+                this.logFollowers.delete(slug);
+            }
+        };
+    }
+
+    /**
      * The output of the containers of a preview, cut off at the start it belongs to. Compose only
      * recreates the containers that actually changed, so the ones it leaves alone would otherwise
      * still carry the output of the run before - which is exactly what a restart is meant to get
@@ -456,6 +480,18 @@ export class PreviewRegistry {
     async readContainerLogs(slug: string, options: { tail: number; service?: string }): Promise<string> {
         this.require(slug);
         return composeLogs(composeProject(slug), { ...options, sinceSeconds: this.secondsSinceStartAttempt(slug) });
+    }
+
+    /**
+     * Like readContainerLogs, followed while the containers run. Resolves once compose stops
+     * following - when the containers are gone - or the signal aborts.
+     */
+    async followContainerLogs(
+        slug: string,
+        options: { tail: number; service?: string; onLine: (line: string) => void; signal: AbortSignal },
+    ): Promise<void> {
+        this.require(slug);
+        await followComposeLogs(composeProject(slug), { ...options, sinceSeconds: this.secondsSinceStartAttempt(slug) });
     }
 
     /** Undefined for a preview that was already running when the controller came up. */
@@ -518,11 +554,10 @@ export class PreviewRegistry {
 
     /** Appends to the start log of a preview, one write after the other. */
     private write(slug: string, text: string): Promise<void> {
-        const pending = (this.logWrites.get(slug) ?? Promise.resolve()).then(() =>
-            appendFile(join(this.logDir, `${slug}.log`), text).catch(() => undefined),
-        );
-        this.logWrites.set(slug, pending);
-        return pending;
+        return this.enqueueLogWrite(slug, async () => {
+            await appendFile(join(this.logDir, `${slug}.log`), text).catch(() => undefined);
+            this.logFollowers.get(slug)?.forEach((follower) => follower.onAppend(text));
+        });
     }
 
     /**
@@ -531,13 +566,26 @@ export class PreviewRegistry {
      * in the fresh log.
      */
     private resetLog(slug: string): Promise<void> {
-        const pending = (this.logWrites.get(slug) ?? Promise.resolve()).then(() =>
-            rm(join(this.logDir, `${slug}.log`), { force: true }).catch(() => undefined),
-        );
+        return this.enqueueLogWrite(slug, async () => {
+            await rm(join(this.logDir, `${slug}.log`), { force: true }).catch(() => undefined);
+            this.logFollowers.get(slug)?.forEach((follower) => follower.onReset(""));
+        });
+    }
+
+    /** Runs the step after everything queued for the start log of this preview before it. */
+    private enqueueLogWrite(slug: string, step: () => Promise<void>): Promise<void> {
+        const pending = (this.logWrites.get(slug) ?? Promise.resolve()).then(step).catch(() => undefined);
         this.logWrites.set(slug, pending);
         return pending;
     }
 }
+
+/** Called synchronously, in the order the start log was written in. */
+type StartLogFollower = {
+    /** What the start log holds from now on: all of it on subscribing, nothing on a new start. */
+    onReset: (text: string) => void;
+    onAppend: (text: string) => void;
+};
 
 type DiscoveredCheckout = Checkout & { urls: PreviewUrl[]; updatedAt?: number };
 
