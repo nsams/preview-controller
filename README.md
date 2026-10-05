@@ -309,7 +309,7 @@ works from the labels of the containers, so the controller never needs the compo
 
 ## Link from GitHub
 
-[action.yml](action.yml) is a reusable action for the repositories that get previewed. It starts
+[github-action/action.yml](github-action/action.yml) is a reusable action for the repositories that get previewed. It starts
 nothing. All it does is add a commit status, shown in the checks of a pull request, whose
 details link points to `/open/<org>/<repo>/<branch>` on the controller. Following that link starts
 the preview of the branch, or only opens it when it already runs, and sends the browser to it -
@@ -330,7 +330,7 @@ jobs:
     preview:
         runs-on: ubuntu-latest
         steps:
-            - uses: nsams/preview-controller@main
+            - uses: nsams/preview-controller/github-action@main
               with:
                   controller-url: https://preview.example.com
 ```

@@ -99,7 +99,7 @@ app.use("*", async (c, next) => {
     return c.html(startingPage(preview, controllerUrl), 503);
 });
 
-// The link the status of the github action points to (see action.yml): starts the preview of a
+// The link the status of the github action points to (see github-action/action.yml): starts the preview of a
 // branch unless it already runs, and sends the browser to it. The branch is the rest of the path,
 // slashes included. It is a path and not a query string because the login leads back to the
 // path only.
