@@ -53,7 +53,7 @@ export function fetchContainerLog(slug: string, { tail, service }: { tail: numbe
 }
 
 /** Creates the preview if necessary and starts it in the background. */
-export function startPreview(ref: { org: string; repo: string; branch: string }) {
+export function startPreview(ref: { org: string; repo: string; branch: string; script?: string }) {
     return call(client.previews.$post({ json: ref }));
 }
 
@@ -73,7 +73,11 @@ export type ContainerUsage = Awaited<ReturnType<typeof fetchUsage>>[string];
 export type ServiceState = Awaited<ReturnType<typeof fetchServices>>[number];
 
 export function describeRef(preview: Preview): string {
-    return preview.ref ? `${preview.ref.org}/${preview.ref.repo} @ ${preview.ref.branch}` : "repository unknown";
+    if (!preview.ref) {
+        return "repository unknown";
+    }
+    const { org, repo, branch, script } = preview.ref;
+    return `${org}/${repo} @ ${branch}${script ? ` (${script})` : ""}`;
 }
 
 export function previewPath(slug: string): string {

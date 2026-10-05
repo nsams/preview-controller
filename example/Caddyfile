@@ -1,0 +1,18 @@
+{
+	auto_https off
+	admin off
+}
+
+# The controller passes the host header through unchanged, so every domain of the preview is
+# routed here by name. The host matcher ignores the port.
+http://{$PREVIEW_DOMAIN} {
+	root * /srv/site
+	templates
+	file_server
+}
+
+http://admin--{$PREVIEW_DOMAIN} {
+	root * /srv/admin
+	templates
+	file_server
+}
