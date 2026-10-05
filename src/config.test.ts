@@ -26,6 +26,7 @@ test("everything but the password and the base domain has a default", () => {
         portRange: { from: 31000, to: 31099 },
         dataDir: resolve("./data"),
         githubToken: undefined,
+        frontendDevServerPort: undefined,
     });
 });
 
@@ -36,6 +37,7 @@ test("values from the environment win", () => {
         PREVIEW_CONTROLLER_REMOVE_AFTER_DAYS: "0",
         PREVIEW_CONTROLLER_PORT_RANGE: "32000-32010",
         PREVIEW_CONTROLLER_GITHUB_TOKEN: " token ",
+        PREVIEW_CONTROLLER_FRONTEND_DEV_SERVER_PORT: "5173",
     });
     assert.deepEqual(
         { ...loadConfig(), dataDir: undefined },
@@ -49,6 +51,7 @@ test("values from the environment win", () => {
             portRange: { from: 32000, to: 32010 },
             dataDir: undefined,
             githubToken: "token",
+            frontendDevServerPort: 5173,
         },
     );
 });

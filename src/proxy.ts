@@ -8,8 +8,8 @@ export type ProxyTarget = {
 };
 
 /**
- * Pipes a request to the preview running on the given local port. The Host header is passed
- * through unchanged, because the reverse proxy inside the preview routes by host name.
+ * Pipes a request to the preview running on the given local port - or, in dev, to vite. The Host
+ * header is passed through unchanged, because the reverse proxy inside the preview routes by host name.
  */
 export function proxyToPreview(incoming: IncomingMessage, outgoing: ServerResponse, target: ProxyTarget): void {
     const headers: IncomingHttpHeaders = { ...incoming.headers };
@@ -40,7 +40,7 @@ export function proxyToPreview(incoming: IncomingMessage, outgoing: ServerRespon
         if (!outgoing.headersSent) {
             outgoing.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
         }
-        outgoing.end(`Preview is not reachable: ${error.message}`);
+        outgoing.end(`Not reachable: ${error.message}`);
     });
 
     incoming.on("aborted", () => upstream.destroy());

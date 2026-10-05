@@ -6,7 +6,7 @@
     "scripts": {
         "build": "vite build --config frontend/vite.config.ts",
         "dev": "dev-pm start all",
-        "dev:backend": "node --watch --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
+        "dev:backend": "PREVIEW_CONTROLLER_FRONTEND_DEV_SERVER_PORT=5173 node --watch --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
         "dev:frontend": "vite --config frontend/vite.config.ts",
         "lint": "run-p -l lint:{eslint,knip,prettier,tsc,tsc-frontend}",
         "lint:eslint": "eslint --max-warnings 0 .",
