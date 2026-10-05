@@ -1,0 +1,15 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/session-start.sh",
+                        "type": "command"
+                    }
+                ],
+                "matcher": "startup|resume"
+            }
+        ]
+    }
+}
