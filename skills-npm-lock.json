@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "skills": {
+    "dev-pm": {
+      "package": "dev-process-manager",
+      "version": "4.1.0",
+      "skillPath": "skills/dev-pm/SKILL.md"
+    }
+  }
+}
