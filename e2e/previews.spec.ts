@@ -125,6 +125,59 @@ test("the detail page shows the start and the containers", async ({ page, api, c
     await expect(page.locator("pre")).toContainText("fixture app v1 listening");
 });
 
+test("the logs are streamed while the detail page is open", async ({ page, api, controller, branch, slug }) => {
+    await startPreview(api, controller, branch);
+    await waitFor(api, slug, "running");
+
+    // A restart clears the start log and writes it anew, which shows up without a reload.
+    await page.goto(`/previews/${slug}`);
+    await expect(page.locator("pre")).toContainText("building v1");
+    await api.request(`/api/previews/${slug}/restart`, { method: "POST" });
+    await expect(page.locator("pre")).toContainText("is still at", { timeout: 90_000 });
+    await expect(page.locator("pre")).toContainText("is up on port", { timeout: 90_000 });
+    await expect(page.locator("pre")).not.toContainText("building v1");
+    await waitFor(api, slug, "running");
+
+    await page.getByRole("tab", { name: "All containers" }).click();
+    await expect(page.getByTestId("container-log-state")).toHaveText("live");
+    await api.request(`${previewUrl(slug)}/followed-live`);
+    await expect(page.locator("pre")).toContainText("fixture app served /followed-live");
+});
+
+test("the logs only follow while follow is switched on", async ({ page, api, controller, branch, slug }) => {
+    await startPreview(api, controller, branch);
+    await waitFor(api, slug, "running");
+    const request = async (count: number, path: string) => {
+        for (let index = 0; index < count; index++) {
+            await api.request(`${previewUrl(slug)}/${path}-${index}`);
+        }
+    };
+
+    await page.goto(`/previews/${slug}?log=containers`);
+    await expect(page.getByTestId("container-log-state")).toHaveText("live");
+    const log = page.locator("pre");
+    const follow = page.getByRole("switch", { name: "Follow" });
+    const distanceFromBottom = () => log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight);
+
+    await expect(follow).toBeChecked();
+    await request(80, "followed");
+    await expect(log).toContainText("fixture app served /followed-79");
+    await expect.poll(distanceFromBottom).toBeLessThan(5);
+
+    await follow.uncheck();
+    const scrollTop = await log.evaluate((element) => element.scrollTop);
+    await request(40, "not-followed");
+    await expect(log).toContainText("fixture app served /not-followed-39");
+    expect(await log.evaluate((element) => element.scrollTop)).toBe(scrollTop);
+    expect(await distanceFromBottom()).toBeGreaterThan(100);
+
+    // Switching it back on jumps to the end, scrolling up switches it off again.
+    await follow.check();
+    await expect.poll(distanceFromBottom).toBeLessThan(5);
+    await log.evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect(follow).not.toBeChecked();
+});
+
 test("a restarted controller finds its previews again", async ({ api, controller, branch }) => {
     const slug = await startPreview(api, controller, branch);
     const before = await waitFor(api, slug, "running");

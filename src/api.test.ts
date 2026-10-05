@@ -44,6 +44,8 @@ test("unknown previews are answered with 404", async () => {
         ["DELETE", "/previews/nothing"],
         ["GET", "/previews/nothing/services"],
         ["GET", "/previews/nothing/logs"],
+        ["GET", "/previews/nothing/logs/stream"],
+        ["GET", "/previews/nothing/logs/stream?source=start"],
     ]) {
         assert.deepEqual(await call(method, path), { status: 404, json: error }, `${method} ${path}`);
     }
