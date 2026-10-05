@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
+import { cannotOpenPage, failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
 import type { Preview } from "./previews.ts";
 
 const payload = `"><script>alert(1)</script>`;
@@ -16,7 +16,13 @@ const preview: Preview = {
 };
 
 test("nothing a project or a visitor controls ends up as markup", () => {
-    const pages = [loginPage(payload, payload), startingPage(preview, "http://x"), failedPage(preview, "http://x"), unknownHostPage(payload)];
+    const pages = [
+        loginPage(payload, payload),
+        startingPage(preview, "http://x"),
+        failedPage(preview, "http://x"),
+        unknownHostPage(payload),
+        cannotOpenPage(payload),
+    ];
     for (const page of pages) {
         assert.ok(!page.includes("<script>alert(1)"), page);
         assert.ok(page.includes("&lt;script&gt;alert(1)&lt;/script&gt;"), page);

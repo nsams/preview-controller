@@ -9,8 +9,8 @@ import { createApi } from "./api.ts";
 import { createSessionCookie, isPasswordCorrect, isSessionValid, safeRedirectTarget } from "./auth.ts";
 import { loadConfig } from "./config.ts";
 import { registerSecret } from "./exec.ts";
-import { failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
-import { PreviewRegistry } from "./previews.ts";
+import { cannotOpenPage, failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
+import { PreviewError, PreviewRegistry } from "./previews.ts";
 import { proxyToPreview } from "./proxy.ts";
 
 const config = loadConfig();
@@ -97,6 +97,22 @@ app.use("*", async (c, next) => {
     }
     c.header("retry-after", "5");
     return c.html(startingPage(preview, controllerUrl), 503);
+});
+
+// The link the status of the github action points to (see action.yml): starts the preview of a
+// branch unless it already runs, and sends the browser to it. The branch is the rest of the path,
+// slashes included. It is a path and not a query string because the login leads back to the
+// path only.
+app.get("/open/:org/:repo/:branch{.+}", async (c) => {
+    try {
+        const preview = await registry.request({ org: c.req.param("org"), repo: c.req.param("repo"), branch: c.req.param("branch") });
+        return c.redirect(registry.primaryUrlOf(preview), 302);
+    } catch (error) {
+        if (error instanceof PreviewError) {
+            return c.html(cannotOpenPage(error.message), 400);
+        }
+        throw error;
+    }
 });
 
 app.route("/api", createApi(registry));
