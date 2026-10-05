@@ -116,7 +116,9 @@ types. A route only shows up in that type when it is chained onto the others.
 
 ```bash
 npm run build          # writes frontend/dist, which npm start serves
-npm run dev:frontend   # vite with hot reloading, next to npm run dev
+npm run dev            # controller with --watch and vite with hot reloading, side by side
+npm run dev:backend    # only the controller
+npm run dev:frontend   # only vite
 ```
 
 Open the dev server as `http://preview.localhost:5173/` - with the base domain, not `localhost`.
