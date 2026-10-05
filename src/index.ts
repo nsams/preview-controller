@@ -120,13 +120,23 @@ app.route("/api", createApi(registry));
 /** Where `npm run build` puts the frontend, relative to the working directory like serveStatic wants it. */
 const frontendDir = "frontend/dist";
 
-// The react frontend is the whole ui of the controller host. It is a single page app, so every
-// path that is not a built file gets its index.html and the frontend routes it.
-app.use("*", serveStatic({ root: frontendDir }));
-app.get("*", async (c) => {
-    const index = await readFile(`${frontendDir}/index.html`, "utf8").catch(() => undefined);
-    return index ? c.html(index) : c.text("The frontend has not been built, run npm run build.", 404);
-});
+if (config.frontendDevServerPort) {
+    // `npm run dev`: vite serves the frontend with hot reloading, the controller stays the one url
+    // to open. The hot reload websocket goes to vite directly, see frontend/vite.config.ts.
+    const port = config.frontendDevServerPort;
+    app.get("*", (c) => {
+        proxyToPreview(c.env.incoming, c.env.outgoing, { port, scheme: config.scheme });
+        return RESPONSE_ALREADY_SENT;
+    });
+} else {
+    // The react frontend is the whole ui of the controller host. It is a single page app, so every
+    // path that is not a built file gets its index.html and the frontend routes it.
+    app.use("*", serveStatic({ root: frontendDir }));
+    app.get("*", async (c) => {
+        const index = await readFile(`${frontendDir}/index.html`, "utf8").catch(() => undefined);
+        return index ? c.html(index) : c.text("The frontend has not been built, run npm run build.", 404);
+    });
+}
 
 const idleSweep = setInterval(async () => {
     await registry.refresh();

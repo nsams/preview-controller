@@ -117,7 +117,7 @@ types. A route only shows up in that type when it is chained onto the others.
 ```bash
 npm run build          # writes frontend/dist, which npm start serves
 npm run dev            # controller with --watch and vite with hot reloading, in dev-process-manager
-npm run dev:backend    # only the controller
+npm run dev:backend    # only the controller, passing the frontend on to vite
 npm run dev:frontend   # only vite
 ```
 
@@ -125,11 +125,11 @@ npm run dev:frontend   # only vite
 and returns. `npx dev-pm logs`, `npx dev-pm restart backend` and `npx dev-pm shutdown` work with
 them afterwards.
 
-Open the dev server as `http://preview.localhost:5173/` - with the base domain, not `localhost`.
-The session cookie is set on the base domain and cookies ignore the port, so the dev server shares
-the session of the controller, and vite passes `/api` and the login on to the controller with the
-host header unchanged, which is how the controller knows they are meant for itself and not for a
-preview.
+Open the controller as usual, `http://preview.localhost:9000/`. `npm run dev:backend` sets
+`PREVIEW_CONTROLLER_FRONTEND_DEV_SERVER_PORT=5173`, so instead of `frontend/dist` the controller
+passes every request for the frontend on to vite, behind the same password - every link of the
+controller, the ones on the starting and failed pages of a preview included, ends up in the dev
+server. Only the hot reload websocket connects to vite on port 5173 directly.
 
 ## Linting
 

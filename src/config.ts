@@ -10,6 +10,8 @@ export type Config = {
     portRange: { from: number; to: number };
     dataDir: string;
     githubToken?: string;
+    /** Set by `npm run dev`: the controller passes the frontend on to vite there instead of serving the build. */
+    frontendDevServerPort?: number;
 };
 
 const prefix = "PREVIEW_CONTROLLER_";
@@ -26,7 +28,9 @@ function readString(name: string, fallback?: string): string {
     return value;
 }
 
-function readNumber(name: string, fallback: number): number {
+function readNumber(name: string, fallback: number): number;
+function readNumber(name: string, fallback?: number): number | undefined;
+function readNumber(name: string, fallback?: number): number | undefined {
     const raw = process.env[`${prefix}${name}`]?.trim();
     if (!raw) {
         return fallback;
@@ -79,5 +83,6 @@ export function loadConfig(): Config {
         portRange: readPortRange(),
         dataDir: resolve(readString("DATA_DIR", "./data")),
         githubToken: process.env[`${prefix}GITHUB_TOKEN`]?.trim() || undefined,
+        frontendDevServerPort: readNumber("FRONTEND_DEV_SERVER_PORT"),
     };
 }
