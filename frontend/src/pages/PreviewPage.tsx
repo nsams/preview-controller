@@ -12,10 +12,10 @@ import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { useCallback, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import { describeRef, fetchPreview, fetchUsage, logsPath, runAction, UnauthorizedError, type PreviewAction, type PreviewDetails } from "../api.ts";
+import { describeRef, fetchPreview, fetchUsage, logsPath, type PreviewAction, type PreviewDetails, runAction, UnauthorizedError } from "../api.ts";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";

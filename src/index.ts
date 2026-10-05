@@ -1,8 +1,8 @@
-import { serve } from "@hono/node-server";
-import type { HttpBindings } from "@hono/node-server";
+import { readFile } from "node:fs/promises";
+
+import { type HttpBindings, serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
-import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 
 import { createApi } from "./api.ts";
