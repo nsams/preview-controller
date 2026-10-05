@@ -68,7 +68,7 @@ So:
 
 ## Api
 
-The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
+The ui is the react frontend (see below) at `/` and `/previews/<slug>`. `/previews/<slug>/logs`, where the logs used to live, leads to the latter.
 It works with the same json api a script would use:
 
 | Method   | Path                                                   | Description                                                    |
@@ -133,8 +133,9 @@ npm run lint:fix   # eslint --fix and prettier --write
 
 ## Logs
 
-Every preview has a log page at `/previews/<slug>/logs`, linked from the status page and from
-the page shown when a start failed. It has two parts:
+The detail page of a preview, `/previews/<slug>`, shows its logs below the links, facts and
+actions. It is linked from the status page and from the page shown when a start failed. The logs
+have two parts:
 
 - the **start log**, what the controller did while checking out, installing, rendering the
   site-configs and running compose, including the error if one of those steps failed. The output

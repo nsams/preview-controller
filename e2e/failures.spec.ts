@@ -20,7 +20,7 @@ test("a failed start is shown, not retried on its own, and started again by hand
     await waitFor(api, slug, "running");
 });
 
-test("a crashing service is called out on the logs page", async ({ page, api, controller, branch }) => {
+test("a crashing service is called out on the detail page", async ({ page, api, controller, branch }) => {
     // Up long enough for `compose up --wait`, then gone for good.
     const compose = `${readFileSync(join(import.meta.dirname, "fixture-project", "compose.yml"), "utf8")}
   worker:
@@ -32,7 +32,9 @@ test("a crashing service is called out on the logs page", async ({ page, api, co
     await waitFor(api, slug, "running");
 
     // The page stops polling once nothing is starting or failing, which is the case until the worker exits.
+    // The old logs page leads to the detail page.
     await page.goto(`/previews/${slug}/logs`);
+    await expect(page).toHaveURL(`/previews/${slug}`);
     await expect(async () => {
         await page.reload();
         await expect(page.getByRole("alert")).toContainText("worker (exited (3))", { timeout: 2_000 });

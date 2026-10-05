@@ -84,6 +84,7 @@ export function previewPath(slug: string): string {
     return `/previews/${encodeURIComponent(slug)}`;
 }
 
+/** The detail page, which shows the logs below the preview - of one service only when given. */
 export function logsPath(slug: string, service?: string): string {
-    return service ? `${previewPath(slug)}/logs?service=${encodeURIComponent(service)}` : `${previewPath(slug)}/logs`;
+    return service ? `${previewPath(slug)}?service=${encodeURIComponent(service)}` : previewPath(slug);
 }

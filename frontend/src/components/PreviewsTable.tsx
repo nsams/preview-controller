@@ -8,7 +8,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
-import { type ContainerUsage, describeRef, logsPath, type Preview, previewPath } from "../api.ts";
+import { type ContainerUsage, describeRef, type Preview, previewPath } from "../api.ts";
 import { formatCpu, formatDuration, formatMemory } from "../format.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 
@@ -32,7 +32,6 @@ export function PreviewsTable({ previews, usage }: { previews: Preview[]; usage?
                         <TableCell align="right">Idle</TableCell>
                         <TableCell align="right">CPU</TableCell>
                         <TableCell align="right">Memory</TableCell>
-                        <TableCell />
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -49,9 +48,6 @@ export function PreviewsTable({ previews, usage }: { previews: Preview[]; usage?
                             <TableCell align="right">{formatDuration(preview.lastAccessAt)}</TableCell>
                             <TableCell align="right">{formatCpu(usage?.[preview.slug]?.cpuPercent)}</TableCell>
                             <TableCell align="right">{formatMemory(usage?.[preview.slug]?.memoryBytes)}</TableCell>
-                            <TableCell align="right">
-                                <Link href={logsPath(preview.slug)}>logs</Link>
-                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

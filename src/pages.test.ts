@@ -34,6 +34,6 @@ test("the starting page reloads itself, the failed page does not", () => {
 });
 
 test("the pages of a preview host link to the frontend on the controller", () => {
-    assert.match(startingPage(preview, "http://controller"), /href="http:\/\/controller\/previews\/acme-demo-main\/logs"/);
+    assert.match(startingPage(preview, "http://controller"), /href="http:\/\/controller\/previews\/acme-demo-main"/);
     assert.match(failedPage(preview, "http://controller"), /href="http:\/\/controller\/previews\/acme-demo-main"/);
 });
