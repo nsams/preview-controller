@@ -5,9 +5,8 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { IntlProvider } from "react-intl";
-import { Redirect, Route, Switch } from "react-router-dom";
+import { Route, Switch } from "react-router-dom";
 
-import { previewPath } from "./api.ts";
 import { Layout } from "./components/Layout.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { PreviewPage } from "./pages/PreviewPage.tsx";
@@ -35,12 +34,6 @@ createRoot(root).render(
                             <Route path="/previews/:slug" exact>
                                 <PreviewPage />
                             </Route>
-                            {/* The logs used to have a page of their own, older links still lead there. */}
-                            <Route
-                                path="/previews/:slug/logs"
-                                exact
-                                render={({ match, location }) => <Redirect to={`${previewPath(match.params.slug ?? "")}${location.search}`} />}
-                            />
                             <Route>
                                 <NotFoundPage />
                             </Route>

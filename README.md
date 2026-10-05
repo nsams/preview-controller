@@ -68,7 +68,7 @@ So:
 
 ## Api
 
-The ui is the react frontend (see below) at `/` and `/previews/<slug>`. `/previews/<slug>/logs`, where the logs used to live, leads to the latter.
+The ui is the react frontend (see below) at `/` and `/previews/<slug>`.
 It works with the same json api a script would use:
 
 | Method   | Path                                                   | Description                                                    |

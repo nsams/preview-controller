@@ -26,7 +26,7 @@ const tabColors: Record<ServiceState["status"], string | undefined> = {
 
 /**
  * Which log is shown, kept in the url: the start log without a parameter, the containers with
- * ?log=containers, a single service with ?service=<name> - which is what the old logs page used.
+ * ?log=containers, a single service with ?service=<name>.
  */
 type Selection = { source: "start" } | { source: "containers"; service?: string };
 
