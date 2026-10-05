@@ -15,3 +15,6 @@ frontend/dist
 
 # Playwright
 test-results/
+
+# dev-process-manager daemon
+.pm.sock

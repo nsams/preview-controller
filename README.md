@@ -116,8 +116,14 @@ types. A route only shows up in that type when it is chained onto the others.
 
 ```bash
 npm run build          # writes frontend/dist, which npm start serves
-npm run dev:frontend   # vite with hot reloading, next to npm run dev
+npm run dev            # controller with --watch and vite with hot reloading, in dev-process-manager
+npm run dev:backend    # only the controller
+npm run dev:frontend   # only vite
 ```
+
+`npm run dev` starts both scripts from [dev-pm.config.ts](dev-pm.config.ts) in a background daemon
+and follows their logs. Stopping the log output leaves them running: `npx dev-pm logs`, `npx dev-pm
+restart backend` and `npx dev-pm shutdown` work with them afterwards.
 
 Open the dev server as `http://preview.localhost:5173/` - with the base domain, not `localhost`.
 The session cookie is set on the base domain and cookies ignore the port, so the dev server shares
