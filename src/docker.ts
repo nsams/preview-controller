@@ -52,7 +52,7 @@ export async function composeLogs(project: string, options: { tail: number; serv
 }
 
 /** How a service of a preview is doing, as far as someone reading its logs cares. */
-export type ServiceStatus = "running" | "starting" | "stopped" | "failed";
+type ServiceStatus = "running" | "starting" | "stopped" | "failed";
 
 export type ServiceState = {
     name: string;

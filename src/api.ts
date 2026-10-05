@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { validator } from "hono/validator";
 
-import { readUsageByComposeProject, type ContainerUsage } from "./docker.ts";
+import { type ContainerUsage, readUsageByComposeProject } from "./docker.ts";
 import { describeError } from "./exec.ts";
-import { PreviewError, type Preview, type PreviewRegistry } from "./previews.ts";
+import { type Preview, PreviewError, type PreviewRegistry } from "./previews.ts";
 
 const servicePattern = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/;
 
@@ -25,6 +25,16 @@ function readString(value: unknown): string {
     return typeof value === "string" ? value.trim() : "";
 }
 
+/** The start script is optional, an empty one means the default. */
+function readRef(value: Record<string, unknown>): { org: string; repo: string; branch: string; script?: string } {
+    return {
+        org: readString(value.org),
+        repo: readString(value.repo),
+        branch: readString(value.branch),
+        script: readString(value.script) || undefined,
+    };
+}
+
 /**
  * The json api below /api, used by the frontend and by scripts. The routes are chained on purpose:
  * that is what lets hono infer ApiType, from which the frontend gets a typed client - see
@@ -36,7 +46,7 @@ export function createApi(registry: PreviewRegistry) {
     const unknown = (slug: string) => ({ error: `Unknown preview "${slug}"` });
     const describe = (error: unknown) => ({ error: describeError(error) });
 
-    async function request(ref: { org: string; repo: string; branch: string }) {
+    async function request(ref: { org: string; repo: string; branch: string; script?: string }) {
         try {
             return { preview: toJson(await registry.request(ref)) };
         } catch (error) {
@@ -71,7 +81,7 @@ export function createApi(registry: PreviewRegistry) {
             /** What the start form of the frontend submits. */
             .post(
                 "/previews",
-                validator("json", (value) => ({ org: readString(value.org), repo: readString(value.repo), branch: readString(value.branch) })),
+                validator("json", (value) => readRef(value)),
                 async (c) => {
                     const result = await request(c.req.valid("json"));
                     return result.preview ? c.json(result.preview, 200) : c.json({ error: result.error }, 400);
@@ -82,7 +92,7 @@ export function createApi(registry: PreviewRegistry) {
             // would otherwise be taken for.
             .get(
                 "/previews/start",
-                validator("query", (value) => ({ org: readString(value.org), repo: readString(value.repo), branch: readString(value.branch) })),
+                validator("query", (value) => readRef(value)),
                 async (c) => {
                     const ref = c.req.valid("query");
                     if (!ref.org || !ref.repo || !ref.branch) {

@@ -2,7 +2,7 @@ import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 
-import { fetchPreviews, fetchUsage, UnauthorizedError, type Preview } from "../api.ts";
+import { fetchPreviews, fetchUsage, type Preview, UnauthorizedError } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { PreviewsTable } from "../components/PreviewsTable.tsx";

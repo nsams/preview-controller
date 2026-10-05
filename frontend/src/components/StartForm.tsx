@@ -5,24 +5,29 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { previewPath, startPreview } from "../api.ts";
 import { ErrorMessage } from "./ErrorMessage.tsx";
 
-type Fields = { org: string; repo: string; branch: string };
+type Fields = { org: string; repo: string; branch: string; script: string };
 
-const fields: { name: keyof Fields; label: string; placeholder: string }[] = [
-    { name: "org", label: "Organization", placeholder: "vivid-planet" },
-    { name: "repo", label: "Repository", placeholder: "dextinity-starter" },
-    { name: "branch", label: "Branch", placeholder: "main" },
+const fields: { name: keyof Fields; label: string; placeholder: string; isRequired: boolean }[] = [
+    { name: "org", label: "Organization", placeholder: "vivid-planet", isRequired: true },
+    { name: "repo", label: "Repository", placeholder: "dextinity-starter", isRequired: true },
+    { name: "branch", label: "Branch", placeholder: "main", isRequired: true },
+    // For repositories that do not keep it in their root, or have more than one.
+    { name: "script", label: "Start script", placeholder: "start-preview.sh", isRequired: false },
 ];
 
-/** Organization and repository start out as the ones used last, the branch is what usually changes. */
+/**
+ * Organization, repository and start script start out as the ones used last, the branch is what usually
+ * changes.
+ */
 export function StartForm({ initial }: { initial?: Partial<Fields> }) {
     const navigate = useNavigate();
-    const [values, setValues] = useState<Fields>({ org: initial?.org ?? "", repo: initial?.repo ?? "", branch: "" });
+    const [values, setValues] = useState<Fields>({ org: initial?.org ?? "", repo: initial?.repo ?? "", branch: "", script: initial?.script ?? "" });
     const [error, setError] = useState<unknown>();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,7 +36,7 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
         setIsSubmitting(true);
         setError(undefined);
         try {
-            const preview = await startPreview(values);
+            const preview = await startPreview({ ...values, script: values.script.trim() || undefined });
             navigate(previewPath(preview.slug));
         } catch (caught) {
             setError(caught);
@@ -50,7 +55,7 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
                 </Box>
             ) : null}
             <Stack component="form" onSubmit={submit} direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "flex-start" } }}>
-                {fields.map(({ name, label, placeholder }) => (
+                {fields.map(({ name, label, placeholder, isRequired }) => (
                     <TextField
                         key={name}
                         name={name}
@@ -58,12 +63,12 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
                         placeholder={placeholder}
                         value={values[name]}
                         onChange={(event) => setValues({ ...values, [name]: event.target.value })}
-                        required
+                        required={isRequired}
                         size="small"
                         autoFocus={name === "branch"}
                         autoComplete="off"
                         slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: "off" } }}
-                        sx={{ flex: name === "branch" ? 1.2 : 1 }}
+                        sx={{ flex: name === "branch" ? 1.2 : name === "script" ? 1.2 : 1 }}
                     />
                 ))}
                 <Button type="submit" variant="contained" startIcon={<PlayArrowIcon />} loading={isSubmitting} sx={{ height: 40 }}>

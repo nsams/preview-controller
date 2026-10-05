@@ -16,9 +16,9 @@ npm start
 
 Open `http://preview.localhost:9000`. Everything is behind one password.
 
-The page has a form for organization, repository and branch, and lists the previews that exist.
-Organization and repository are prefilled with the ones used last, because usually only the
-branch changes.
+The page has a form for organization, repository, branch and an optional start script, and lists
+the previews that exist. Everything but the branch is prefilled with the one used last, because
+usually only the branch changes.
 
 The list links to the detail page of every preview, which is where the domains the project
 reported - site, admin and whatever else - can be opened, and where it is started, restarted,
@@ -45,24 +45,45 @@ The response contains the url the preview will be reachable at. The first start 
 branch and builds the images, which takes a few minutes; opening the url in the meantime shows
 a page that reloads itself until the preview is up, with a link to its log.
 
+## Security
+
+Only use the controller for repositories you trust. Starting a preview means running
+`start-preview.sh` of that repository and building and running its docker compose stack on the
+host - code from the repository, executed with the rights of the controller and with access to
+the docker daemon, which is as good as root on the host. Nothing is sandboxed: a malicious or
+compromised branch can read the other previews, the checkouts, the GitHub token and anything else
+the host can reach.
+
+So:
+
+- Only make repositories previewable whose every branch you would also run on your own machine.
+  Do not point it at repositories where outsiders can push branches, and do not preview pull
+  requests from forks.
+- Scope `PREVIEW_CONTROLLER_GITHUB_TOKEN` to exactly those repositories (see
+  [Private repositories](#private-repositories)) - there is no allow-list beyond what the token
+  can read.
+- Treat the password as access to the host. Anyone who has it can start a preview of any
+  repository the token or the host can reach.
+- Run the controller on a host dedicated to previews, not next to anything that matters.
+
 ## Api
 
 The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
 It works with the same json api a script would use:
 
-| Method   | Path                                        | Description                                           |
-| -------- | ------------------------------------------- | ----------------------------------------------------- |
-| `GET`    | `/api/previews`                             | All known previews as json                            |
-| `POST`   | `/api/previews`                             | Create and start a preview from `{org, repo, branch}` |
-| `GET`    | `/api/previews/start?org=…&repo=…&branch=…` | The same as a get, for scripts                        |
-| `GET`    | `/api/previews/:slug`                       | One preview, with the links it reported               |
-| `POST`   | `/api/previews/:slug/start`                 | Bring a stopped or failed preview back up             |
-| `POST`   | `/api/previews/:slug/restart`               | Fetch, rebuild and restart a running preview          |
-| `POST`   | `/api/previews/:slug/stop`                  | Stop the containers, keep images and data             |
-| `DELETE` | `/api/previews/:slug`                       | Remove containers, volumes and the checkout           |
-| `GET`    | `/api/previews/:slug/services`              | The compose services of a preview and their state     |
-| `GET`    | `/api/previews/:slug/logs`                  | Start log or container logs as plain text             |
-| `GET`    | `/api/usage`                                | Cpu and memory of every running preview by slug       |
+| Method   | Path                                                   | Description                                                    |
+| -------- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| `GET`    | `/api/previews`                                        | All known previews as json                                     |
+| `POST`   | `/api/previews`                                        | Create and start a preview from `{org, repo, branch, script?}` |
+| `GET`    | `/api/previews/start?org=…&repo=…&branch=…[&script=…]` | The same as a get, for scripts                                 |
+| `GET`    | `/api/previews/:slug`                                  | One preview, with the links it reported                        |
+| `POST`   | `/api/previews/:slug/start`                            | Bring a stopped or failed preview back up                      |
+| `POST`   | `/api/previews/:slug/restart`                          | Fetch, rebuild and restart a running preview                   |
+| `POST`   | `/api/previews/:slug/stop`                             | Stop the containers, keep images and data                      |
+| `DELETE` | `/api/previews/:slug`                                  | Remove containers, volumes and the checkout                    |
+| `GET`    | `/api/previews/:slug/services`                         | The compose services of a preview and their state              |
+| `GET`    | `/api/previews/:slug/logs`                             | Start log or container logs as plain text                      |
+| `GET`    | `/api/usage`                                           | Cpu and memory of every running preview by slug                |
 
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
 once and reuse the cookie:
@@ -96,6 +117,19 @@ The session cookie is set on the base domain and cookies ignore the port, so the
 the session of the controller, and vite passes `/api` and the login on to the controller with the
 host header unchanged, which is how the controller knows they are meant for itself and not for a
 preview.
+
+## Linting
+
+The lint setup follows the [Dextinity starter](https://github.com/vivid-planet/dextinity-starter):
+prettier, eslint with `@dextinity/eslint-config` (the node config for the controller, the react
+config without the admin and translation rules for the frontend), knip for unused files, exports
+and dependencies, and tsc for both sides. `npm install` sets up a husky pre-commit hook that runs
+lint-staged, and the lint workflow runs the same checks on every pull request.
+
+```bash
+npm run lint       # all checks
+npm run lint:fix   # eslint --fix and prettier --write
+```
 
 ## Logs
 
@@ -146,9 +180,9 @@ committed. Variables that are already set in the shell win over all of them.
 | `PREVIEW_CONTROLLER_PORT_RANGE`           | `31000-31099` | Range the per-preview ports are taken from                        |
 | `PREVIEW_CONTROLLER_DATA_DIR`             | `./data`      | Checkouts and logs                                                |
 
-A preview is identified by GitHub organization, repository and branch, and is cloned from
-`https://github.com/<org>/<repo>.git`. All three values are checked against narrow patterns
-before they reach a git command line, a directory name or a host name.
+A preview is identified by GitHub organization, repository, branch and start script, and is cloned
+from `https://github.com/<org>/<repo>.git`. All four values are checked against narrow patterns
+before they reach a git command line, a file name or a host name.
 
 ### Private repositories
 
@@ -184,8 +218,8 @@ single label under the base domain - see below.
                                                            routes admin--/idp--/… further
 ```
 
-- The **slug** is derived from organization, repository and branch, and is the dns label of the
-  preview.
+- The **slug** is derived from organization, repository, branch and start script, and is the dns
+  label of the preview. A preview with the default start script has the slug it always had.
 - **Everything a preview serves is one label below the base domain.** The preview itself is
   `<slug>.<baseDomain>`, everything else it serves is `<name>--<slug>.<baseDomain>` - `admin--`,
   `idp--`, and whatever domains the project itself has. A wildcard certificate covers one label
@@ -236,8 +270,19 @@ single label under the base domain - see below.
 ## What a project has to provide
 
 The controller knows nothing about the projects it starts. A repository only has to contain an
-executable `start-preview.sh` in its root that leaves a running docker compose project behind.
-It is called with these environment variables:
+executable start script that leaves a running docker compose project behind. By default that is
+`start-preview.sh` in its root; a repository that keeps it elsewhere, or has several setups, names
+it when a preview is started:
+
+```bash
+curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=nsams&repo=preview-controller&branch=main&script=example/start-preview.sh"
+```
+
+The script is a path relative to the root of the repository, without `.` or `..` segments. It is
+part of what identifies a preview - the same branch with two scripts is two previews - and is kept
+in `.preview-script` in the checkout, because git cannot tell. It runs in its own directory, so a
+script below the root finds its compose file next to it. It is called with these environment
+variables:
 
 | Variable               | Meaning                                                        |
 | ---------------------- | -------------------------------------------------------------- |
@@ -248,6 +293,9 @@ It is called with these environment variables:
 | `PREVIEW_HOST`         | Public host of the preview, including the port if there is one |
 | `PREVIEW_SCHEME`       | `http` or `https`                                              |
 | `PREVIEW_URLS`         | File the script may report the urls of the preview to          |
+
+[example/](example) is a minimal project that does exactly that - started with the request above -
+and can be copied as a starting point.
 
 Anything else - installing dependencies, rendering configuration, building images - is up to
 that script. Whatever it writes to stdout or stderr ends up in the start log of the preview as
@@ -269,6 +317,25 @@ The first entry is where the controller sends you after starting a preview. Only
 `https` urls are accepted, everything else in that file is ignored. The file stays in the
 checkout, so the links survive a restart of the controller without being stored anywhere else. Everything after the start is done through `docker compose -p <project>`, which
 works from the labels of the containers, so the controller never needs the compose file itself.
+
+## Tests
+
+```bash
+npm test                          # unit tests, src/*.test.ts
+npx playwright install chromium   # once
+npm run test:e2e                  # end-to-end tests, e2e/*.spec.ts
+```
+
+The unit tests use the test runner of node and need nothing else.
+
+The end-to-end tests build the frontend, start the real controller and drive it through http and
+a browser, so they need docker. They preview [e2e/fixture-project](e2e/fixture-project), a `start-preview.sh` with a
+compose file and an app that answers every request with what it received. Instead of GitHub, it is
+cloned from a bare repository on disk, through a git `insteadOf` rewrite in the environment of the
+controller. Every test pushes a branch of its own and deletes its previews afterwards. A chromium
+that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.github/workflows/test.yml).
 
 ## Limitations
 

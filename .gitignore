@@ -12,3 +12,6 @@ frontend/dist
 
 # Installed by .claude/scripts/session-start.sh
 .claude/skills/
+
+# Playwright
+test-results/
