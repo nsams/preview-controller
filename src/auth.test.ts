@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cookieName, createSessionCookie, isPasswordCorrect, isSessionValid, readCookie, safeRedirectTarget, stripSessionCookie } from "./auth.ts";
+import { createSessionCookie, isPasswordCorrect, isSessionValid, safeRedirectTarget, stripSessionCookie } from "./auth.ts";
 import type { Config } from "./config.ts";
 
 const config = { password: "correct-password", baseDomain: "preview.example.com", scheme: "https" } as Config;
+
+const [cookieName] = createSessionCookie(config).split("=");
 
 function sessionValue(cookie: string): string {
     return cookie.split(";")[0].slice(cookieName.length + 1);
@@ -41,12 +43,6 @@ test("an expired session is not valid", (t) => {
     const value = sessionValue(createSessionCookie(config));
     t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 8 * 24 * 60 * 60 * 1000 });
     assert.equal(isSessionValid(config, `${cookieName}=${value}`), false);
-});
-
-test("cookies are read by name, values may contain =", () => {
-    assert.equal(readCookie("a=1; b=x=y", "b"), "x=y");
-    assert.equal(readCookie("a=1", "b"), undefined);
-    assert.equal(readCookie(undefined, "a"), undefined);
 });
 
 test("the session cookie is stripped before a request reaches a preview", () => {

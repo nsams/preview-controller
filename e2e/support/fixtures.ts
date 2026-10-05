@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { test as base, expect } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
 
 import { createSlug } from "../../src/repository.ts";
 import { baseDomain, Client, Controller, type Preview } from "./environment.ts";
@@ -9,6 +9,8 @@ export { expect };
 
 export const test = base.extend<{ api: Client; branch: string; slug: string }, { controller: Controller }>({
     controller: [
+        // Playwright reads the dependencies of a fixture from its destructured first argument.
+        // eslint-disable-next-line no-empty-pattern
         async ({}, use) => {
             const controller = await Controller.start();
             await use(controller);
@@ -40,7 +42,7 @@ export const test = base.extend<{ api: Client; branch: string; slug: string }, {
     },
     // Browsers resolve *.localhost on their own. Every page starts signed in on the status page.
     page: async ({ page, api }, use) => {
-        const [name, value] = api.cookie!.split("=");
+        const [name, value] = (api.cookie ?? "").split("=");
         await page.context().addCookies([{ name, value, domain: `.${baseDomain}`, path: "/" }]);
         await page.goto("/");
         await use(page);
@@ -49,7 +51,11 @@ export const test = base.extend<{ api: Client; branch: string; slug: string }, {
 
 export async function waitFor(api: Client, slug: string, status: Preview["status"]): Promise<Preview> {
     await expect.poll(async () => (await api.preview(slug))?.status, { message: `${slug} should be ${status}`, timeout: 90_000 }).toBe(status);
-    return (await api.preview(slug))!;
+    const preview = await api.preview(slug);
+    if (!preview) {
+        throw new Error(`${slug} is gone`);
+    }
+    return preview;
 }
 
 /** Starts a preview of the branch through the api, pushing the branch first. */

@@ -1,5 +1,4 @@
-import { request as httpRequest } from "node:http";
-import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
+import { type IncomingHttpHeaders, type IncomingMessage, request as httpRequest, type ServerResponse } from "node:http";
 
 import { stripSessionCookie } from "./auth.ts";
 

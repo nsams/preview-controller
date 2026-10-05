@@ -1,9 +1,9 @@
 services:
-    web:
-        build: .
-        ports:
-            - "127.0.0.1:${PREVIEW_PORT}:3000"
-        healthcheck:
-            test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
-            interval: 1s
-            retries: 30
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:${PREVIEW_PORT}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 1s
+      retries: 30

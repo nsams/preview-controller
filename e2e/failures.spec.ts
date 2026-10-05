@@ -23,9 +23,9 @@ test("a failed start is shown, not retried on its own, and started again by hand
 test("a crashing service is called out on the logs page", async ({ page, api, controller, branch }) => {
     // Up long enough for `compose up --wait`, then gone for good.
     const compose = `${readFileSync(join(import.meta.dirname, "fixture-project", "compose.yml"), "utf8")}
-    worker:
-        build: .
-        command: ["node", "-e", "setTimeout(() => { console.error('worker crashed'); process.exit(3); }, 3000)"]
+  worker:
+    build: .
+    command: ["node", "-e", "setTimeout(() => { console.error('worker crashed'); process.exit(3); }, 3000)"]
 `;
     const slug = await startPreview(api, controller, branch, { "compose.yml": compose });
     // The preview as a whole is running, only one of its services is not.
