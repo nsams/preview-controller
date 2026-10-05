@@ -1,13 +1,13 @@
 import { appendFile, mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import type { Config } from "./config.ts";
 import { composeDown, composeLogs, composeRestart, composeServiceStates, composeStart, composeStop, discoverComposeProjects } from "./docker.ts";
 import type { ComposeProjectState, ServiceState } from "./docker.ts";
 import { describeError, runStreaming } from "./exec.ts";
 import { checkoutBranch, readCheckout, type Checkout } from "./git.ts";
-import { createSlug, repositoryUrl, validateRepositoryRef, type RepositoryRef } from "./repository.ts";
+import { createSlug, defaultStartScript, normalizeScript, repositoryUrl, validateRepositoryRef, type RepositoryRef } from "./repository.ts";
 
 export type PreviewStatus = "stopped" | "starting" | "running" | "failed";
 
@@ -36,13 +36,21 @@ export type Preview = {
 export class PreviewError extends Error {}
 
 export function describeRef(preview: Preview): string {
-    return preview.ref ? `${preview.ref.org}/${preview.ref.repo} @ ${preview.ref.branch}` : "repository unknown";
+    return preview.ref ? formatRef(preview.ref) : "repository unknown";
+}
+
+function formatRef(ref: RepositoryRef): string {
+    return `${ref.org}/${ref.repo} @ ${ref.branch}${ref.script ? ` (${ref.script})` : ""}`;
 }
 
 const composeProjectPrefix = "preview-";
 
-/** The script a repository has to provide, see the readme. */
-const startScriptName = "start-preview.sh";
+/**
+ * The start script of a preview that does not use the default one. Git knows repository and branch
+ * of a checkout, but not this, so it is kept next to it - untracked like the files below, which is
+ * what lets it survive a restart of the controller.
+ */
+const scriptFileName = ".preview-script";
 
 /** Written by the start script of a project, read back on every discovery. */
 const urlsFileName = ".preview-urls";
@@ -139,8 +147,17 @@ export class PreviewRegistry {
                     const directory = join(this.checkoutDir, entry.name);
                     const checkout = await readCheckout(directory);
                     if (checkout) {
-                        const [urls, stats] = await Promise.all([readUrls(join(directory, urlsFileName)), stat(directory).catch(() => undefined)]);
-                        checkouts.set(entry.name, { ...checkout, urls, updatedAt: stats?.mtimeMs });
+                        const [urls, script, stats] = await Promise.all([
+                            readUrls(join(directory, urlsFileName)),
+                            readFile(join(directory, scriptFileName), "utf8").then(normalizeScript, () => undefined),
+                            stat(directory).catch(() => undefined),
+                        ]);
+                        const ref = { ...checkout.ref, script };
+                        // A script file that has been tampered with would no longer belong to this slug.
+                        if (script && (validateRepositoryRef(ref) || createSlug(ref) !== entry.name)) {
+                            return;
+                        }
+                        checkouts.set(entry.name, { ...checkout, ref, urls, updatedAt: stats?.mtimeMs });
                     }
                 }),
         );
@@ -171,7 +188,9 @@ export class PreviewRegistry {
 
         return {
             slug,
-            ref: checkout?.ref ?? runtime?.ref,
+            // The one a start was requested for is the more recent, the script file of a fresh clone
+            // is only written once the clone is through.
+            ref: runtime?.ref ?? checkout?.ref,
             commit: checkout?.commit,
             urls: checkout?.urls ?? [],
             port: project?.port ?? runtime?.port,
@@ -221,6 +240,7 @@ export class PreviewRegistry {
      * Starting happens in the background - the caller gets the record right away.
      */
     async request(ref: RepositoryRef): Promise<Preview> {
+        ref = { ...ref, script: normalizeScript(ref.script) };
         const problem = validateRepositoryRef(ref);
         if (problem) {
             throw new PreviewError(problem);
@@ -273,10 +293,13 @@ export class PreviewRegistry {
         runtime.port ??= this.projects.get(composeProject(slug))?.port ?? (await this.allocatePort());
 
         await this.resetLog(slug);
-        await this.log(slug, `--- starting ${slug} (${ref.org}/${ref.repo} @ ${ref.branch}) ---`);
+        await this.log(slug, `--- starting ${slug} (${formatRef(ref)}) ---`);
 
         await this.log(slug, "checking out...");
         const commit = await checkoutBranch(repositoryUrl(ref), ref.branch, directory, this.config.githubToken);
+        if (ref.script) {
+            await writeFile(join(directory, scriptFileName), `${ref.script}\n`);
+        }
 
         // Building is what makes a start take minutes, and there is nothing to build when the
         // containers that are still there were built from exactly this commit: those are only
@@ -292,9 +315,12 @@ export class PreviewRegistry {
             // compose project of the given name that publishes the given port. Its output goes into
             // the log while it runs - pulling and building the images takes minutes, and until the
             // first container exists there is nothing else to look at.
-            await this.log(slug, `running ${startScriptName}...`);
-            await runStreaming(join(directory, startScriptName), [], {
-                cwd: directory,
+            // Run from its own directory, which is where a script kept below the root expects its
+            // compose file and everything else it brings along.
+            const script = join(directory, ref.script ?? defaultStartScript);
+            await this.log(slug, `running ${ref.script ?? defaultStartScript}...`);
+            await runStreaming(script, [], {
+                cwd: dirname(script),
                 env: this.startEnv(slug, runtime.port),
                 onLine: (line) => void this.write(slug, `${line}\n`),
             });

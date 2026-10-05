@@ -16,9 +16,9 @@ npm start
 
 Open `http://preview.localhost:9000`. Everything is behind one password.
 
-The page has a form for organization, repository and branch, and lists the previews that exist.
-Organization and repository are prefilled with the ones used last, because usually only the
-branch changes.
+The page has a form for organization, repository, branch and an optional start script, and lists
+the previews that exist. Everything but the branch is prefilled with the one used last, because
+usually only the branch changes.
 
 The list links to the detail page of every preview, which is where the domains the project
 reported - site, admin and whatever else - can be opened, and where it is started, restarted,
@@ -50,19 +50,19 @@ a page that reloads itself until the preview is up, with a link to its log.
 The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
 It works with the same json api a script would use:
 
-| Method   | Path                                        | Description                                           |
-| -------- | ------------------------------------------- | ----------------------------------------------------- |
-| `GET`    | `/api/previews`                             | All known previews as json                            |
-| `POST`   | `/api/previews`                             | Create and start a preview from `{org, repo, branch}` |
-| `GET`    | `/api/previews/start?org=…&repo=…&branch=…` | The same as a get, for scripts                        |
-| `GET`    | `/api/previews/:slug`                       | One preview, with the links it reported               |
-| `POST`   | `/api/previews/:slug/start`                 | Bring a stopped or failed preview back up             |
-| `POST`   | `/api/previews/:slug/restart`               | Fetch, rebuild and restart a running preview          |
-| `POST`   | `/api/previews/:slug/stop`                  | Stop the containers, keep images and data             |
-| `DELETE` | `/api/previews/:slug`                       | Remove containers, volumes and the checkout           |
-| `GET`    | `/api/previews/:slug/services`              | The compose services of a preview and their state     |
-| `GET`    | `/api/previews/:slug/logs`                  | Start log or container logs as plain text             |
-| `GET`    | `/api/usage`                                | Cpu and memory of every running preview by slug       |
+| Method   | Path                                                   | Description                                                    |
+| -------- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| `GET`    | `/api/previews`                                        | All known previews as json                                     |
+| `POST`   | `/api/previews`                                        | Create and start a preview from `{org, repo, branch, script?}` |
+| `GET`    | `/api/previews/start?org=…&repo=…&branch=…[&script=…]` | The same as a get, for scripts                                 |
+| `GET`    | `/api/previews/:slug`                                  | One preview, with the links it reported                        |
+| `POST`   | `/api/previews/:slug/start`                            | Bring a stopped or failed preview back up                      |
+| `POST`   | `/api/previews/:slug/restart`                          | Fetch, rebuild and restart a running preview                   |
+| `POST`   | `/api/previews/:slug/stop`                             | Stop the containers, keep images and data                      |
+| `DELETE` | `/api/previews/:slug`                                  | Remove containers, volumes and the checkout                    |
+| `GET`    | `/api/previews/:slug/services`                         | The compose services of a preview and their state              |
+| `GET`    | `/api/previews/:slug/logs`                             | Start log or container logs as plain text                      |
+| `GET`    | `/api/usage`                                           | Cpu and memory of every running preview by slug                |
 
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
 once and reuse the cookie:
@@ -146,9 +146,9 @@ committed. Variables that are already set in the shell win over all of them.
 | `PREVIEW_CONTROLLER_PORT_RANGE`           | `31000-31099` | Range the per-preview ports are taken from                        |
 | `PREVIEW_CONTROLLER_DATA_DIR`             | `./data`      | Checkouts and logs                                                |
 
-A preview is identified by GitHub organization, repository and branch, and is cloned from
-`https://github.com/<org>/<repo>.git`. All three values are checked against narrow patterns
-before they reach a git command line, a directory name or a host name.
+A preview is identified by GitHub organization, repository, branch and start script, and is cloned
+from `https://github.com/<org>/<repo>.git`. All four values are checked against narrow patterns
+before they reach a git command line, a file name or a host name.
 
 ### Private repositories
 
@@ -184,8 +184,8 @@ single label under the base domain - see below.
                                                            routes admin--/idp--/… further
 ```
 
-- The **slug** is derived from organization, repository and branch, and is the dns label of the
-  preview.
+- The **slug** is derived from organization, repository, branch and start script, and is the dns
+  label of the preview. A preview with the default start script has the slug it always had.
 - **Everything a preview serves is one label below the base domain.** The preview itself is
   `<slug>.<baseDomain>`, everything else it serves is `<name>--<slug>.<baseDomain>` - `admin--`,
   `idp--`, and whatever domains the project itself has. A wildcard certificate covers one label
@@ -236,8 +236,19 @@ single label under the base domain - see below.
 ## What a project has to provide
 
 The controller knows nothing about the projects it starts. A repository only has to contain an
-executable `start-preview.sh` in its root that leaves a running docker compose project behind.
-It is called with these environment variables:
+executable start script that leaves a running docker compose project behind. By default that is
+`start-preview.sh` in its root; a repository that keeps it elsewhere, or has several setups, names
+it when a preview is started:
+
+```bash
+curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=nsams&repo=preview-controller&branch=main&script=example/start-preview.sh"
+```
+
+The script is a path relative to the root of the repository, without `.` or `..` segments. It is
+part of what identifies a preview - the same branch with two scripts is two previews - and is kept
+in `.preview-script` in the checkout, because git cannot tell. It runs in its own directory, so a
+script below the root finds its compose file next to it. It is called with these environment
+variables:
 
 | Variable               | Meaning                                                        |
 | ---------------------- | -------------------------------------------------------------- |
@@ -249,9 +260,8 @@ It is called with these environment variables:
 | `PREVIEW_SCHEME`       | `http` or `https`                                              |
 | `PREVIEW_URLS`         | File the script may report the urls of the preview to          |
 
-[example/](example) is a minimal project that does exactly that and can be copied as a starting
-point. The [start-preview.sh](start-preview.sh) in the root of this repository hands over to it,
-so this repository can be started as a preview itself.
+[example/](example) is a minimal project that does exactly that - started with the request above -
+and can be copied as a starting point.
 
 Anything else - installing dependencies, rendering configuration, building images - is up to
 that script. Whatever it writes to stdout or stderr ends up in the start log of the preview as

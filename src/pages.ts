@@ -107,7 +107,7 @@ export function unknownHostPage(host: string): string {
         "Unknown preview",
         `<h1>No preview for this host</h1>
         <p class="lead"><code>${escapeHtml(host)}</code></p>
-        <div class="card"><p>Start it with <code>/api/previews/start?org=&lt;org&gt;&amp;repo=&lt;repo&gt;&amp;branch=&lt;branch&gt;</code>.</p></div>`,
+        <div class="card"><p>Start it with <code>/api/previews/start?org=&lt;org&gt;&amp;repo=&lt;repo&gt;&amp;branch=&lt;branch&gt;</code>, plus <code>&amp;script=&lt;path&gt;</code> for a start script other than <code>start-preview.sh</code>.</p></div>`,
     );
 }
 
