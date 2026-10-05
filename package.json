@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "build": "vite build --config frontend/vite.config.ts",
-        "dev": "dev-pm start --follow all",
+        "dev": "dev-pm start all",
         "dev:backend": "node --watch --env-file-if-exists=.env --env-file-if-exists=.env.local --env-file-if-exists=.env.secrets src/index.ts",
         "dev:frontend": "vite --config frontend/vite.config.ts",
         "lint": "run-p -l lint:{eslint,knip,prettier,tsc,tsc-frontend}",
@@ -46,7 +46,6 @@
         "react-router-dom": "^5.3.4"
     },
     "devDependencies": {
-        "@comet/dev-process-manager": "^3.2.0",
         "@dextinity/eslint-config": "10.8.0",
         "@playwright/test": "^1.63.0",
         "@types/node": "^24.13.6",
@@ -55,6 +54,7 @@
         "@types/react-router": "^5.1.20",
         "@types/react-router-dom": "^5.3.3",
         "@vitejs/plugin-react": "^6.1.1",
+        "dev-process-manager": "^4.1.0",
         "eslint": "^9.39.5",
         "husky": "^9.1.7",
         "knip": "^6.39.0",
