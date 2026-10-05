@@ -10,6 +10,7 @@ reachable under its own subdomain.
 ```bash
 npm install
 cp .env.secrets.tpl .env.secrets   # and put a password in it
+npm run build                      # the frontend
 npm start
 ```
 
@@ -46,21 +47,22 @@ a page that reloads itself until the preview is up, with a link to its log.
 
 ## Api
 
-| Method   | Path                                        | Description                                 |
-| -------- | ------------------------------------------- | ------------------------------------------- |
-| `GET`    | `/`                                         | Start form and a table with cpu and memory  |
-| `POST`   | `/previews/start`                           | What the start form submits                 |
-| `GET`    | `/previews/:slug`                           | Detail page with the links of one preview   |
-| `POST`   | `/previews/:slug/start`                     | What the start button submits               |
-| `POST`   | `/previews/:slug/restart`                   | What the restart button submits             |
-| `POST`   | `/previews/:slug/stop`                      | What the stop button submits                |
-| `POST`   | `/previews/:slug/delete`                    | What the delete button submits              |
-| `GET`    | `/api/previews`                             | All known previews as json                  |
-| `GET`    | `/previews/:slug/logs`                      | Log page of one preview                     |
-| `GET`    | `/api/previews/:slug/logs`                  | The same logs as plain text                 |
-| `GET`    | `/api/previews/start?org=…&repo=…&branch=…` | Create and start a preview, returns its url |
-| `POST`   | `/api/previews/:slug/stop`                  | Stop the containers, keep images and data   |
-| `DELETE` | `/api/previews/:slug`                       | Remove containers, volumes and the checkout |
+The ui is the react frontend (see below) at `/`, `/previews/<slug>` and `/previews/<slug>/logs`.
+It works with the same json api a script would use:
+
+| Method   | Path                                        | Description                                           |
+| -------- | ------------------------------------------- | ----------------------------------------------------- |
+| `GET`    | `/api/previews`                             | All known previews as json                            |
+| `POST`   | `/api/previews`                             | Create and start a preview from `{org, repo, branch}` |
+| `GET`    | `/api/previews/start?org=…&repo=…&branch=…` | The same as a get, for scripts                        |
+| `GET`    | `/api/previews/:slug`                       | One preview, with the links it reported               |
+| `POST`   | `/api/previews/:slug/start`                 | Bring a stopped or failed preview back up             |
+| `POST`   | `/api/previews/:slug/restart`               | Fetch, rebuild and restart a running preview          |
+| `POST`   | `/api/previews/:slug/stop`                  | Stop the containers, keep images and data             |
+| `DELETE` | `/api/previews/:slug`                       | Remove containers, volumes and the checkout           |
+| `GET`    | `/api/previews/:slug/services`              | The compose services of a preview and their state     |
+| `GET`    | `/api/previews/:slug/logs`                  | Start log or container logs as plain text             |
+| `GET`    | `/api/usage`                                | Cpu and memory of every running preview by slug       |
 
 All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
 once and reuse the cookie:
@@ -69,6 +71,31 @@ once and reuse the cookie:
 curl -c cookies.txt -d "password=$PREVIEW_PASSWORD" http://preview.localhost:9000/__preview-controller/login
 curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-planet&repo=dextinity-starter&branch=main"
 ```
+
+## Frontend
+
+The ui of the controller is a react app in [frontend/](frontend), built with vite and
+[mui](https://mui.com/material-ui/). The controller serves the build from `frontend/dist` on the
+base domain, behind the same password, and answers every path that is not a file or under `/api`
+with its `index.html`, so the frontend does the routing. The only pages still rendered by the
+controller itself are the ones a preview host shows in place of the preview - starting, failed,
+unknown - and the login, because all of them have to work on every host.
+
+The api lives in [src/api.ts](src/api.ts) as one chained hono app. The frontend imports only its
+type and talks to it through hono's typed client (`hc<ApiType>`), so paths, parameters and response
+shapes are checked by `npm run lint` on both sides - there are no hand-written copies of the api
+types. A route only shows up in that type when it is chained onto the others.
+
+```bash
+npm run build          # writes frontend/dist, which npm start serves
+npm run dev:frontend   # vite with hot reloading, next to npm run dev
+```
+
+Open the dev server as `http://preview.localhost:5173/` - with the base domain, not `localhost`.
+The session cookie is set on the base domain and cookies ignore the port, so the dev server shares
+the session of the controller, and vite passes `/api` and the login on to the controller with the
+host header unchanged, which is how the controller knows they are meant for itself and not for a
+preview.
 
 ## Logs
 
@@ -92,7 +119,7 @@ the page shown when a start failed. It has two parts:
   restarted by compose - the preview as a whole stays "running" while one of its services never
   comes up.
 
-The page reloads itself while a preview is still starting, and while a container is failing. The
+The page keeps itself up to date while a preview is still starting, and while a container is failing. The
 same is available as plain text:
 
 ```bash
@@ -151,7 +178,7 @@ single label under the base domain - see below.
 ```
   browser ──▶ preview-controller (one port)
                  │
-                 ├── <baseDomain>                   -> status page and api
+                 ├── <baseDomain>                   -> frontend and api
                  └── [<name>--]<slug>.<baseDomain>  -> 127.0.0.1:<preview port>
                                                        └── caddy inside the preview stack
                                                            routes admin--/idp--/… further
@@ -253,5 +280,5 @@ works from the labels of the containers, so the controller never needs the compo
   looks stopped again; the reason is still in its log.
 - One controller process manages the docker daemon it runs on. There is no scheduling across
   hosts and no limit on how many previews run at once beyond the port range.
-- The status page polls `docker stats`, which takes a moment when many containers run.
+- The frontend polls `docker stats`, which takes a moment when many containers run.
 - Removing is confirmed in the browser, but the api trusts whoever has the password.
