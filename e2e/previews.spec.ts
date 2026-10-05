@@ -76,6 +76,10 @@ test("a stopped preview starts again when it is opened", async ({ page, api, con
 
     await page.getByRole("button", { name: "Stop" }).click();
     await expectStatus(page, "stopped");
+    // Its containers were stopped on purpose, that is not called out as a failure.
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "web", exact: true })).toBeVisible();
+    await expect(page.getByText(/not running/)).toHaveCount(0);
 
     // The page shown meanwhile reloads itself until the preview is back.
     await page.goto(previewUrl(slug));
