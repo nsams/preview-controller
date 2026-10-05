@@ -1,4 +1,4 @@
-import Alert from "@mui/material/Alert";
+import { Alert } from "@dextinity/admin";
 
 import { UnauthorizedError } from "../api.ts";
 import { LoginForm } from "./LoginForm.tsx";

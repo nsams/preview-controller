@@ -1,8 +1,11 @@
+import "@fontsource-variable/roboto-flex/full.css";
+
+import { MuiThemeProvider, RouterBrowserRouter } from "@dextinity/admin";
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider } from "@mui/material/styles";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { IntlProvider } from "react-intl";
+import { Route, Switch } from "react-router-dom";
 
 import { Layout } from "./components/Layout.tsx";
 import { LogsPage } from "./pages/LogsPage.tsx";
@@ -17,20 +20,31 @@ if (!root) {
 }
 
 // The paths are the ones the pages of a preview host link to, see src/pages.ts.
+// The Dextinity components need an IntlProvider, their english default messages are all this uses.
 createRoot(root).render(
     <StrictMode>
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <BrowserRouter>
-                <Routes>
-                    <Route element={<Layout />}>
-                        <Route path="/" element={<PreviewsPage />} />
-                        <Route path="/previews/:slug" element={<PreviewPage />} />
-                        <Route path="/previews/:slug/logs" element={<LogsPage />} />
-                        <Route path="*" element={<NotFoundPage />} />
-                    </Route>
-                </Routes>
-            </BrowserRouter>
-        </ThemeProvider>
+        <IntlProvider locale="en" defaultLocale="en">
+            <MuiThemeProvider theme={theme}>
+                <CssBaseline />
+                <RouterBrowserRouter>
+                    <Layout>
+                        <Switch>
+                            <Route path="/" exact>
+                                <PreviewsPage />
+                            </Route>
+                            <Route path="/previews/:slug" exact>
+                                <PreviewPage />
+                            </Route>
+                            <Route path="/previews/:slug/logs" exact>
+                                <LogsPage />
+                            </Route>
+                            <Route>
+                                <NotFoundPage />
+                            </Route>
+                        </Switch>
+                    </Layout>
+                </RouterBrowserRouter>
+            </MuiThemeProvider>
+        </IntlProvider>
     </StrictMode>,
 );

@@ -19,7 +19,7 @@ export function PageHeader({ title, trail = [], children }: { title: string; tra
                 </Breadcrumbs>
             ) : null}
             <Stack direction="row" spacing={2} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                <Typography variant="h5" component="h1" sx={{ wordBreak: "break-word" }}>
+                <Typography variant="h3" component="h1" sx={{ wordBreak: "break-word" }}>
                     {title}
                 </Typography>
                 {children}

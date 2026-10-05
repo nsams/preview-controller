@@ -1,15 +1,15 @@
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { Button } from "@dextinity/admin";
+import { Play } from "@dextinity/admin-icons";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router";
+import { useHistory } from "react-router-dom";
 
 import { previewPath, startPreview } from "../api.ts";
 import { ErrorMessage } from "./ErrorMessage.tsx";
+import { Field } from "./Field.tsx";
 
 type Fields = { org: string; repo: string; branch: string; script: string };
 
@@ -26,7 +26,7 @@ const fields: { name: keyof Fields; label: string; placeholder: string; isRequir
  * changes.
  */
 export function StartForm({ initial }: { initial?: Partial<Fields> }) {
-    const navigate = useNavigate();
+    const history = useHistory();
     const [values, setValues] = useState<Fields>({ org: initial?.org ?? "", repo: initial?.repo ?? "", branch: "", script: initial?.script ?? "" });
     const [error, setError] = useState<unknown>();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +37,7 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
         setError(undefined);
         try {
             const preview = await startPreview({ ...values, script: values.script.trim() || undefined });
-            navigate(previewPath(preview.slug));
+            history.push(previewPath(preview.slug));
         } catch (caught) {
             setError(caught);
             setIsSubmitting(false);
@@ -54,9 +54,9 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
                     <ErrorMessage error={error} />
                 </Box>
             ) : null}
-            <Stack component="form" onSubmit={submit} direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "flex-start" } }}>
+            <Stack component="form" onSubmit={submit} direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "flex-end" } }}>
                 {fields.map(({ name, label, placeholder, isRequired }) => (
-                    <TextField
+                    <Field
                         key={name}
                         name={name}
                         label={label}
@@ -64,14 +64,13 @@ export function StartForm({ initial }: { initial?: Partial<Fields> }) {
                         value={values[name]}
                         onChange={(event) => setValues({ ...values, [name]: event.target.value })}
                         required={isRequired}
-                        size="small"
                         autoFocus={name === "branch"}
                         autoComplete="off"
-                        slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: "off" } }}
+                        inputProps={{ spellCheck: false, autoCapitalize: "off" }}
                         sx={{ flex: name === "branch" ? 1.2 : name === "script" ? 1.2 : 1 }}
                     />
                 ))}
-                <Button type="submit" variant="contained" startIcon={<PlayArrowIcon />} loading={isSubmitting} sx={{ height: 40 }}>
+                <Button type="submit" startIcon={<Play />} loading={isSubmitting}>
                     Start
                 </Button>
             </Stack>

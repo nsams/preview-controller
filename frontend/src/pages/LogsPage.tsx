@@ -1,13 +1,12 @@
-import Alert from "@mui/material/Alert";
+import { Alert, Button, FillSpace } from "@dextinity/admin";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Chip, { type ChipProps } from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useCallback, useEffect, useState } from "react";
-import { Link as RouterLink, useParams, useSearchParams } from "react-router";
+import { Link as RouterLink, useLocation, useParams } from "react-router-dom";
 
 import { fetchContainerLog, fetchPreview, fetchServices, fetchStartLog, logsPath, previewPath, type ServiceState } from "../api.ts";
 import { ErrorMessage } from "../components/ErrorMessage.tsx";
@@ -26,8 +25,8 @@ const chipColors: Record<ServiceState["status"], ChipProps["color"]> = {
 };
 
 export function LogsPage() {
-    const slug = useParams().slug ?? "";
-    const service = useSearchParams()[0].get("service") ?? undefined;
+    const { slug } = useParams<{ slug: string }>();
+    const service = new URLSearchParams(useLocation().search).get("service") ?? undefined;
 
     const load = useCallback(async () => {
         const [preview, services, startLog, containerLog] = await Promise.all([
@@ -107,9 +106,9 @@ export function LogsPage() {
                         <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                             last {tail} lines{preview.containerLogsSinceLastStart ? " since the last start" : ""}
                         </Typography>
-                        <Box sx={{ flex: 1 }} />
+                        <FillSpace />
                         {isLive ? null : (
-                            <Button size="small" onClick={logs.reload}>
+                            <Button variant="textDark" onClick={logs.reload}>
                                 Reload
                             </Button>
                         )}

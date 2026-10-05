@@ -1,19 +1,12 @@
-import DeleteIcon from "@mui/icons-material/Delete";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import StopIcon from "@mui/icons-material/Stop";
-import Alert from "@mui/material/Alert";
+import { Alert, Button, FillSpace, Tooltip } from "@dextinity/admin";
+import { Delete, OpenNewTab, Pause, Play, Reload } from "@dextinity/admin-icons";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
 import Paper from "@mui/material/Paper";
 import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { type ReactNode, useCallback, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useHistory, useParams } from "react-router-dom";
 
 import { describeRef, fetchPreview, fetchUsage, logsPath, type PreviewAction, type PreviewDetails, runAction, UnauthorizedError } from "../api.ts";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
@@ -28,7 +21,7 @@ type ActionButton = { action: PreviewAction; label: string; icon: ReactNode; tit
 const startButton: ActionButton = {
     action: "start",
     label: "Start",
-    icon: <PlayArrowIcon />,
+    icon: <Play />,
     title: "Fetches the branch, rebuilds what changed and brings the preview up again.",
 };
 
@@ -40,16 +33,16 @@ function actionsFor(preview: PreviewDetails): ActionButton[] {
             return [startButton];
         case "stopped":
             // Only a stopped preview can be deleted - while it runs, stopping it comes first.
-            return [startButton, { action: "delete", label: "Delete", icon: <DeleteIcon />, isDanger: true }];
+            return [startButton, { action: "delete", label: "Delete", icon: <Delete />, isDanger: true }];
         case "running":
             return [
                 {
                     action: "restart",
                     label: "Restart",
-                    icon: <RestartAltIcon />,
+                    icon: <Reload />,
                     title: "Fetches the branch, rebuilds what changed and recreates the containers - a restart pulls.",
                 },
-                { action: "stop", label: "Stop", icon: <StopIcon /> },
+                { action: "stop", label: "Stop", icon: <Pause /> },
             ];
         case "starting":
             return [];
@@ -57,8 +50,8 @@ function actionsFor(preview: PreviewDetails): ActionButton[] {
 }
 
 export function PreviewPage() {
-    const slug = useParams().slug ?? "";
-    const navigate = useNavigate();
+    const { slug } = useParams<{ slug: string }>();
+    const history = useHistory();
     const loadPreview = useCallback(() => fetchPreview(slug), [slug]);
     const preview = usePolling(loadPreview, 5_000);
     const usage = usePolling(fetchUsage, 10_000);
@@ -73,7 +66,7 @@ export function PreviewPage() {
             await runAction(slug, action);
             if (action === "delete") {
                 // There is no page left to come back to.
-                navigate("/");
+                history.push("/");
                 return;
             }
             preview.reload();
@@ -86,8 +79,8 @@ export function PreviewPage() {
     const header = (
         <PageHeader title={slug} trail={[{ label: "Previews", href: "/" }]}>
             {preview.data ? <StatusBadge status={preview.data.status} /> : null}
-            <Box sx={{ flex: 1 }} />
-            <Button href={logsPath(slug)} size="small">
+            <FillSpace />
+            <Button href={logsPath(slug)} variant="textDark">
                 Logs
             </Button>
         </PageHeader>
@@ -134,7 +127,7 @@ export function PreviewPage() {
             {header}
             <Stack spacing={2}>
                 {data.status === "starting" ? (
-                    <Alert severity="info" icon={<CircularProgress size={20} />}>
+                    <Alert severity="info">
                         Starting. The branch is fetched and the images are rebuilt, which can take a few minutes - this page updates on its own, and
                         the links already work.
                     </Alert>
@@ -150,7 +143,7 @@ export function PreviewPage() {
                 <Paper variant="outlined" sx={{ p: 3 }}>
                     <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", mb: 3 }}>
                         {data.links.map((link, index) => (
-                            <Button key={link.url} href={link.url} variant={index === 0 ? "contained" : "outlined"} endIcon={<OpenInNewIcon />}>
+                            <Button key={link.url} href={link.url} variant={index === 0 ? "primary" : "outlined"} endIcon={<OpenNewTab />}>
                                 {link.name}
                             </Button>
                         ))}
@@ -175,8 +168,7 @@ export function PreviewPage() {
                                 <Tooltip key={button.action} title={button.title ?? ""}>
                                     <span>
                                         <Button
-                                            variant="outlined"
-                                            color={button.isDanger ? "error" : "inherit"}
+                                            variant={button.isDanger ? "destructive" : "outlined"}
                                             startIcon={button.icon}
                                             loading={runningAction === button.action}
                                             loadingPosition="start"
