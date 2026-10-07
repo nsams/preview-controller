@@ -1,4 +1,6 @@
 {
     "$schema": "https://unpkg.com/knip@5/schema.json",
+    "ignoreBinaries": ["oauth2-proxy"],
+    "ignoreDependencies": ["@dextinity/cli"],
     "project": ["./src/**/*.ts", "./frontend/src/**/*.{ts,tsx}"]
 }

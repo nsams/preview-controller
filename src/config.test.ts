@@ -60,6 +60,7 @@ test("invalid values are refused", () => {
     for (const [name, value, message] of [
         ["OAUTH2_PROXY_URL", "", /OAUTH2_PROXY_URL is not set/],
         ["OAUTH2_PROXY_URL", "127.0.0.1:4180", /url without a path/],
+        ["OAUTH2_PROXY_URL", "https://127.0.0.1:4180", /url without a path/],
         ["OAUTH2_PROXY_URL", "http://127.0.0.1:4180/oauth2", /url without a path/],
         ["BASE_DOMAIN", "", /BASE_DOMAIN is not set/],
         ["SCHEME", "ftp", /"http" or "https"/],
@@ -72,12 +73,4 @@ test("invalid values are refused", () => {
         process.env[`PREVIEW_CONTROLLER_${name}`] = value as string;
         assert.throws(() => loadConfig(), message as RegExp, `${name}=${value}`);
     }
-});
-
-test("authentication can be switched off for local development only explicitly", () => {
-    delete process.env.PREVIEW_CONTROLLER_OAUTH2_PROXY_URL;
-    process.env.PREVIEW_CONTROLLER_AUTH_DISABLED = "true";
-    assert.equal(loadConfig().oauth2ProxyUrl, undefined);
-    process.env.PREVIEW_CONTROLLER_AUTH_DISABLED = "1";
-    assert.throws(() => loadConfig(), /OAUTH2_PROXY_URL is not set/);
 });

@@ -7,7 +7,7 @@ import { hasSession, signInUrl, stripAuthCookies } from "./auth.ts";
 import type { Config } from "./config.ts";
 
 /** Stands in for oauth2-proxy, answering its auth endpoint with the given status. */
-async function withOauth2Proxy(status: number, run: (config: Config & { oauth2ProxyUrl: string }, received: IncomingHttpHeaders[]) => Promise<void>) {
+async function withOauth2Proxy(status: number, run: (config: Config, received: IncomingHttpHeaders[]) => Promise<void>) {
     const received: IncomingHttpHeaders[] = [];
     const server = createServer((request, response) => {
         received.push({ ...request.headers, path: request.url });
@@ -16,7 +16,7 @@ async function withOauth2Proxy(status: number, run: (config: Config & { oauth2Pr
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     try {
         const { port } = server.address() as AddressInfo;
-        await run({ oauth2ProxyUrl: `http://127.0.0.1:${port}` } as Config & { oauth2ProxyUrl: string }, received);
+        await run({ oauth2ProxyUrl: `http://127.0.0.1:${port}` } as Config, received);
     } finally {
         server.close();
     }

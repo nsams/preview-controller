@@ -9,14 +9,14 @@ reachable under its own subdomain.
 
 ```bash
 npm install
-echo PREVIEW_CONTROLLER_AUTH_DISABLED=true >> .env.local   # locally, without oauth2-proxy
-npm run build                                              # the frontend
-npm start
+npm run setup:download-oauth2-proxy   # once, into node_modules/.bin
+npm run dev                           # controller, frontend and the local sign-in
 ```
 
-Open `http://preview.localhost:9000`. In a real deployment everything - the controller and every
-host of every preview - is behind [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/),
-see [Authentication](#authentication).
+Open `http://preview.localhost:9000` and sign in as one of the local users. Everything - the
+controller and every host of every preview - is behind
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/), see
+[Authentication](#authentication).
 
 The page has a form for organization, repository, branch and an optional start script, and lists
 the previews that exist. Everything but the branch is prefilled with the one used last, because
@@ -121,15 +121,17 @@ shapes are checked by `npm run lint` on both sides - there are no hand-written c
 types. A route only shows up in that type when it is chained onto the others.
 
 ```bash
-npm run build          # writes frontend/dist, which npm start serves
-npm run dev            # controller with --watch and vite with hot reloading, in dev-process-manager
-npm run dev:backend    # only the controller, passing the frontend on to vite
-npm run dev:frontend   # only vite
+npm run build               # writes frontend/dist, which npm start serves
+npm run dev                 # all of the below, in dev-process-manager
+npm run dev:backend         # the controller with --watch, passing the frontend on to vite
+npm run dev:frontend        # vite with hot reloading
+npm run dev:auth-provider   # the local identity provider, see Authentication
+npm run dev:auth-proxy      # oauth2-proxy signing in with it
 ```
 
-`npm run dev` starts both scripts from [dev-pm.config.ts](dev-pm.config.ts) in a background daemon
+`npm run dev` starts the scripts from [dev-pm.config.ts](dev-pm.config.ts) in a background daemon
 and returns. `npx dev-pm logs`, `npx dev-pm restart backend` and `npx dev-pm shutdown` work with
-them afterwards.
+them afterwards. `npm start` needs the two auth scripts running as well.
 
 Open the controller as usual, `http://preview.localhost:9000/`. `npm run dev:backend` sets
 `PREVIEW_CONTROLLER_FRONTEND_DEV_SERVER_PORT=5173`, so instead of `frontend/dist` the controller
@@ -210,7 +212,6 @@ committed. Variables that are already set in the shell win over all of them.
 | `PREVIEW_CONTROLLER_BASE_DOMAIN`          | -             | Previews live on `<slug>.<base domain>`, the controller on itself |
 | `PREVIEW_CONTROLLER_SCHEME`               | `http`        | `http` or `https`, for urls and secure cookies                    |
 | `PREVIEW_CONTROLLER_OAUTH2_PROXY_URL`     | -             | oauth2-proxy every request is checked against, see below          |
-| `PREVIEW_CONTROLLER_AUTH_DISABLED`        | -             | `true` switches authentication off, for local development only    |
 | `PREVIEW_CONTROLLER_IDLE_TIMEOUT_MINUTES` | `60`          | Stop a preview after this long without a request                  |
 | `PREVIEW_CONTROLLER_REMOVE_AFTER_DAYS`    | `7`           | Delete a preview stopped this long, `0` switches the cleanup off  |
 | `PREVIEW_CONTROLLER_PORT_RANGE`           | `31000-31099` | Range the per-preview ports are taken from                        |
@@ -285,8 +286,27 @@ What makes this work for the hosts of the previews:
 
 Signing out is `/__oauth2/sign_out`, on any host.
 
-`PREVIEW_CONTROLLER_AUTH_DISABLED=true` switches all of this off for local development. The
-controller then only listens on `127.0.0.1`, and has to be opened on the machine it runs on.
+Signing out is also a link in the header of the frontend.
+
+#### Locally
+
+Local development signs in the same way, through oauth2-proxy, like in
+[dextinity-starter](https://github.com/vivid-planet/dextinity-starter). Instead of GitHub the
+provider is [dev-oidc-provider](https://github.com/vivid-planet/dev-oidc-provider), which knows
+only the users hardcoded in [dev-oidc-provider.config.mts](dev-oidc-provider.config.mts) and lets
+you pick one of them on its sign-in page, no password. `npm run dev` starts both:
+
+- `npm run dev:auth-provider` - dev-oidc-provider on `http://localhost:8080`
+- `npm run dev:auth-proxy` - oauth2-proxy on `127.0.0.1:4180`, where `PREVIEW_CONTROLLER_OAUTH2_PROXY_URL`
+  of `.env` points to. It is the binary that `npm run setup:download-oauth2-proxy` puts into
+  `node_modules/.bin` (`@dextinity/cli download-oauth2-proxy`), with
+  [oauth2-proxy/oauth2-proxy.cfg](oauth2-proxy/oauth2-proxy.cfg) like in production.
+
+Their settings - ports, client, callback, cookie domain for `preview.localhost:9000` - are in
+[oauth2-proxy/dev.env](oauth2-proxy/dev.env), which only these two scripts read: the controller
+passes its own environment on to the start scripts of the previews, and a project with an
+oauth2-proxy of its own must not pick up these values. Locally the user is asked for on every
+sign-in, so signing out is enough to switch to another one.
 
 ## How it works
 
@@ -438,6 +458,7 @@ is labelled. Pull requests from forks get no status, because they are never prev
 ```bash
 npm test                          # unit tests, src/*.test.ts
 npx playwright install chromium   # once
+npm run setup:download-oauth2-proxy   # once
 npm run test:e2e                  # end-to-end tests, e2e/*.spec.ts
 ```
 
@@ -451,8 +472,8 @@ controller. Every test pushes a branch of its own and deletes its previews after
 that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 The controller runs with the real oauth2-proxy and its configuration from
-[oauth2-proxy/](oauth2-proxy), started from the docker image of the compose file there, or from
-the binary in `OAUTH2_PROXY_BINARY` if that is set. Instead of GitHub it signs in with a minimal
+[oauth2-proxy/](oauth2-proxy), the binary of `npm run setup:download-oauth2-proxy`. Instead of
+GitHub or dev-oidc-provider it signs in with a minimal
 OpenID Connect provider in [e2e/support/oidc.ts](e2e/support/oidc.ts), which lets everyone in
 right away - that is how the tests check that a sign-in started on a preview host comes back to
 it.

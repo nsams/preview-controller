@@ -50,37 +50,34 @@ function slugForHost(host: string): string | undefined {
     return (separator === -1 ? label : label.slice(separator + hostSeparator.length)) || undefined;
 }
 
-if (config.oauth2ProxyUrl) {
-    const oauth2Proxy = new URL(config.oauth2ProxyUrl);
-    const authConfig = { ...config, oauth2ProxyUrl: config.oauth2ProxyUrl };
+const oauth2Proxy = new URL(config.oauth2ProxyUrl);
 
-    // Sign-in, callback and sign-out of oauth2-proxy, reachable without a session on every host.
-    // The sign-in is only ever sent to the base domain, see signInUrl.
-    app.all(`${oauth2ProxyPrefix}/*`, (c) => {
-        proxyToPreview(c.env.incoming, c.env.outgoing, {
-            host: oauth2Proxy.hostname,
-            port: Number(oauth2Proxy.port) || (oauth2Proxy.protocol === "https:" ? 443 : 80),
-            scheme: config.scheme,
-            shouldKeepAuthCookies: true,
-        });
-        return RESPONSE_ALREADY_SENT;
+// Sign-in, callback and sign-out of oauth2-proxy, reachable without a session on every host.
+// The sign-in is only ever sent to the base domain, see signInUrl.
+app.all(`${oauth2ProxyPrefix}/*`, (c) => {
+    proxyToPreview(c.env.incoming, c.env.outgoing, {
+        host: oauth2Proxy.hostname,
+        port: Number(oauth2Proxy.port) || (oauth2Proxy.protocol === "https:" ? 443 : 80),
+        scheme: config.scheme,
+        shouldKeepAuthCookies: true,
     });
+    return RESPONSE_ALREADY_SENT;
+});
 
-    // Every other request, on every host, needs a session of oauth2-proxy. A browser without one
-    // is sent to the sign-in and comes back to exactly where it was, previews included. The api
-    // answers 401 instead, which is what the frontend reacts to - a fetch cannot follow a
-    // redirect to the provider anyway.
-    app.use("*", async (c, next) => {
-        if (await hasSession(authConfig, c.req.header("cookie"))) {
-            return next();
-        }
-        const isController = hostName(c.req.header("host")) === config.baseDomain;
-        if ((isController && c.req.path.startsWith("/api/")) || (c.req.method !== "GET" && c.req.method !== "HEAD")) {
-            return c.json({ error: "Not signed in" }, 401);
-        }
-        return c.redirect(signInUrl(controllerUrl, `${config.scheme}://${c.req.header("host")}${c.env.incoming.url}`), 302);
-    });
-}
+// Every other request, on every host, needs a session of oauth2-proxy. A browser without one
+// is sent to the sign-in and comes back to exactly where it was, previews included. The api
+// answers 401 instead, which is what the frontend reacts to - a fetch cannot follow a
+// redirect to the provider anyway.
+app.use("*", async (c, next) => {
+    if (await hasSession(config, c.req.header("cookie"))) {
+        return next();
+    }
+    const isController = hostName(c.req.header("host")) === config.baseDomain;
+    if ((isController && c.req.path.startsWith("/api/")) || (c.req.method !== "GET" && c.req.method !== "HEAD")) {
+        return c.json({ error: "Not signed in" }, 401);
+    }
+    return c.redirect(signInUrl(controllerUrl, `${config.scheme}://${c.req.header("host")}${c.env.incoming.url}`), 302);
+});
 
 // Everything that is not the controller host itself belongs to a preview and is handled here.
 app.use("*", async (c, next) => {
@@ -157,13 +154,8 @@ const idleSweep = setInterval(async () => {
     await registry.removeExpiredPreviews();
 }, 60_000);
 
-// Without authentication the controller is only reachable from the machine it runs on.
-const hostname = config.oauth2ProxyUrl ? "0.0.0.0" : "127.0.0.1";
-const server = serve({ fetch: app.fetch, port: config.port, hostname }, (info) => {
+const server = serve({ fetch: app.fetch, port: config.port, hostname: "0.0.0.0" }, (info) => {
     console.log(`preview-controller listening on ${config.scheme}://${config.baseDomain}:${info.port}`);
-    if (!config.oauth2ProxyUrl) {
-        console.warn("Authentication is switched off, the controller only listens on 127.0.0.1");
-    }
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

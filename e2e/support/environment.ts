@@ -1,5 +1,6 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -153,52 +154,35 @@ export class Repository {
 
 /**
  * The real oauth2-proxy with the configuration from oauth2-proxy/, signing in with the
- * OidcProvider instead of GitHub. Runs the binary in OAUTH2_PROXY_BINARY if that is set, otherwise
- * the docker image of oauth2-proxy/compose.yml.
+ * OidcProvider instead of GitHub. It is the binary of `npm run setup:download-oauth2-proxy`, the
+ * same that local development runs.
  */
 class Oauth2Proxy {
     private process: ChildProcess | undefined;
-    private readonly containerName = `preview-controller-e2e-oauth2-proxy-${process.pid}`;
 
     async start(issuer: string): Promise<void> {
-        const configFile = join(projectDir, "oauth2-proxy", "oauth2-proxy.cfg");
-        const options = [
-            `--http-address=127.0.0.1:${oauth2ProxyPort}`,
-            "--provider=oidc",
-            `--oidc-issuer-url=${issuer}`,
-            `--client-id=${oidcClient.id}`,
-            `--client-secret=${oidcClient.secret}`,
-            `--cookie-secret=${"e2e-cookie-secret-of-32-bytes!!!"}`,
-            `--redirect-url=http://${baseDomain}:${port}/__oauth2/callback`,
-            `--cookie-domain=.${baseDomain}`,
-            `--whitelist-domain=.${baseDomain}:${port}`,
-            "--cookie-secure=false",
-        ];
-        const binary = process.env.OAUTH2_PROXY_BINARY;
-        if (binary) {
-            this.process = spawn(binary, [`--config=${configFile}`, ...options], { stdio: ["ignore", "ignore", "inherit"] });
-        } else {
-            const compose = await readFile(join(projectDir, "oauth2-proxy", "compose.yml"), "utf8");
-            const image = /image: (\S+)/.exec(compose)?.[1] ?? "";
-            this.process = spawn(
-                "docker",
-                [
-                    "run",
-                    "--rm",
-                    "--name",
-                    this.containerName,
-                    "--network",
-                    "host",
-                    "-v",
-                    `${configFile}:/etc/oauth2-proxy.cfg:ro`,
-                    image,
-                    "--config=/etc/oauth2-proxy.cfg",
-                    ...options,
-                ],
-                { stdio: ["ignore", "ignore", "inherit"] },
-            );
+        const binary = join(projectDir, "node_modules", ".bin", "oauth2-proxy");
+        if (!existsSync(binary)) {
+            throw new Error("oauth2-proxy is missing, run npm run setup:download-oauth2-proxy");
         }
-        const deadline = Date.now() + 60_000;
+        this.process = spawn(
+            binary,
+            [
+                `--config=${join(projectDir, "oauth2-proxy", "oauth2-proxy.cfg")}`,
+                `--http-address=127.0.0.1:${oauth2ProxyPort}`,
+                "--provider=oidc",
+                `--oidc-issuer-url=${issuer}`,
+                `--client-id=${oidcClient.id}`,
+                `--client-secret=${oidcClient.secret}`,
+                "--cookie-secret=e2e-cookie-secret-of-32-bytes!!!",
+                `--redirect-url=http://${baseDomain}:${port}/__oauth2/callback`,
+                `--cookie-domain=.${baseDomain}`,
+                `--whitelist-domain=.${baseDomain}:${port}`,
+                "--cookie-secure=false",
+            ],
+            { stdio: ["ignore", "ignore", "inherit"] },
+        );
+        const deadline = Date.now() + 30_000;
         while (
             !(await fetch(`http://127.0.0.1:${oauth2ProxyPort}/ready`).then(
                 (response) => response.ok,
@@ -213,9 +197,6 @@ class Oauth2Proxy {
     }
 
     async stop(): Promise<void> {
-        if (!process.env.OAUTH2_PROXY_BINARY) {
-            await execFileAsync("docker", ["rm", "--force", this.containerName]).catch(() => undefined);
-        }
         const child = this.process;
         if (child && child.exitCode === null && child.signalCode === null) {
             await new Promise((resolve) => child.once("exit", resolve).kill());

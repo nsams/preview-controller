@@ -4,12 +4,8 @@ export type Config = {
     port: number;
     baseDomain: string;
     scheme: "http" | "https";
-    /**
-     * The oauth2-proxy every request is checked against, see auth.ts. Undefined only when
-     * authentication is switched off for local development, which also keeps the controller on
-     * the loopback interface.
-     */
-    oauth2ProxyUrl?: string;
+    /** The oauth2-proxy every request is checked against, see auth.ts. */
+    oauth2ProxyUrl: string;
     idleTimeoutMinutes: number;
     removeAfterDays: number;
     portRange: { from: number; to: number };
@@ -68,10 +64,9 @@ export function loadConfig(): Config {
         fail(`${prefix}SCHEME must be "http" or "https"`);
     }
 
-    const isAuthDisabled = process.env[`${prefix}AUTH_DISABLED`]?.trim() === "true";
-    const oauth2ProxyUrl = isAuthDisabled ? undefined : readString("OAUTH2_PROXY_URL").replace(/\/+$/, "");
-    if (oauth2ProxyUrl !== undefined && !/^https?:\/\/[^/]+$/.test(oauth2ProxyUrl)) {
-        fail(`${prefix}OAUTH2_PROXY_URL must be an http or https url without a path, like "http://127.0.0.1:4180"`);
+    const oauth2ProxyUrl = readString("OAUTH2_PROXY_URL").replace(/\/+$/, "");
+    if (!/^http:\/\/[^/]+$/.test(oauth2ProxyUrl)) {
+        fail(`${prefix}OAUTH2_PROXY_URL must be an http url without a path, like "http://127.0.0.1:4180"`);
     }
 
     const removeAfterDays = Number(process.env[`${prefix}REMOVE_AFTER_DAYS`] ?? 7);

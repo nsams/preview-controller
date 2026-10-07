@@ -18,7 +18,7 @@ const cookieName = "_oauth2_proxy";
  * answers 202 or 401. Anything else is a broken setup and thrown, so that it never lets a request
  * through.
  */
-export async function hasSession(config: Config & { oauth2ProxyUrl: string }, cookieHeader: string | undefined): Promise<boolean> {
+export async function hasSession(config: Config, cookieHeader: string | undefined): Promise<boolean> {
     const response = await fetch(`${config.oauth2ProxyUrl}${oauth2ProxyPrefix}/auth`, {
         headers: cookieHeader ? { cookie: cookieHeader } : {},
         redirect: "manual",
