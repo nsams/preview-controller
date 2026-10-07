@@ -1,19 +1,24 @@
 import { type IncomingHttpHeaders, type IncomingMessage, request as httpRequest, type ServerResponse } from "node:http";
 
-import { stripSessionCookie } from "./auth.ts";
+import { stripAuthCookies } from "./auth.ts";
 
 export type ProxyTarget = {
+    /** 127.0.0.1 unless given. */
+    host?: string;
     port: number;
     scheme: "http" | "https";
+    /** Only for oauth2-proxy itself, every other target never sees its cookies. */
+    shouldKeepAuthCookies?: boolean;
 };
 
 /**
- * Pipes a request to the preview running on the given local port - or, in dev, to vite. The Host
- * header is passed through unchanged, because the reverse proxy inside the preview routes by host name.
+ * Pipes a request to the preview running on the given local port - or, in dev, to vite, or to
+ * oauth2-proxy. The Host header is passed through unchanged, because the reverse proxy inside the
+ * preview routes by host name, and oauth2-proxy picks the domain of its cookies by it.
  */
 export function proxyToPreview(incoming: IncomingMessage, outgoing: ServerResponse, target: ProxyTarget): void {
     const headers: IncomingHttpHeaders = { ...incoming.headers };
-    const cookie = stripSessionCookie(incoming.headers.cookie);
+    const cookie = target.shouldKeepAuthCookies ? incoming.headers.cookie : stripAuthCookies(incoming.headers.cookie);
     if (cookie) {
         headers.cookie = cookie;
     } else {
@@ -24,7 +29,7 @@ export function proxyToPreview(incoming: IncomingMessage, outgoing: ServerRespon
 
     const upstream = httpRequest(
         {
-            host: "127.0.0.1",
+            host: target.host ?? "127.0.0.1",
             port: target.port,
             method: incoming.method,
             path: incoming.url,

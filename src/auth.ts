@@ -1,76 +1,60 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-
 import type { Config } from "./config.ts";
 
-const cookieName = "preview_controller_auth";
-const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Where oauth2-proxy serves its own endpoints, on every host the controller answers for. It has to
+ * match `proxy_prefix` of oauth2-proxy, see oauth2-proxy/oauth2-proxy.cfg. Not the default /oauth2,
+ * because the previews are passed everything else, and a project may well have an /oauth2 of its own.
+ */
+export const oauth2ProxyPrefix = "/__oauth2";
 
-function equals(a: string, b: string): boolean {
-    // Hashing first keeps the comparison constant time even for different lengths.
-    return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
-}
+/**
+ * The name oauth2-proxy gives its cookies by default. A large session is split into
+ * _oauth2_proxy_0, _oauth2_proxy_1, ..., and the csrf cookie of a sign-in is _oauth2_proxy_..._csrf.
+ */
+const cookieName = "_oauth2_proxy";
 
-function sign(config: Config, expiresAt: number): string {
-    return createHmac("sha256", config.password).update(String(expiresAt)).digest("hex");
-}
-
-export function isPasswordCorrect(config: Config, password: string): boolean {
-    return equals(config.password, password);
-}
-
-export function createSessionCookie(config: Config): string {
-    const expiresAt = Date.now() + sessionLifetimeMs;
-    const value = `${expiresAt}.${sign(config, expiresAt)}`;
-    const attributes = [
-        `${cookieName}=${value}`,
-        `Domain=${config.baseDomain}`,
-        "Path=/",
-        "HttpOnly",
-        "SameSite=Lax",
-        `Max-Age=${Math.floor(sessionLifetimeMs / 1000)}`,
-    ];
-    if (config.scheme === "https") {
-        attributes.push("Secure");
+/**
+ * Whether the cookies carry a valid session, asked of the auth endpoint of oauth2-proxy, which
+ * answers 202 or 401. Anything else is a broken setup and thrown, so that it never lets a request
+ * through.
+ */
+export async function hasSession(config: Config & { oauth2ProxyUrl: string }, cookieHeader: string | undefined): Promise<boolean> {
+    const response = await fetch(`${config.oauth2ProxyUrl}${oauth2ProxyPrefix}/auth`, {
+        headers: cookieHeader ? { cookie: cookieHeader } : {},
+        redirect: "manual",
+    });
+    await response.body?.cancel();
+    if (response.status === 202) {
+        return true;
     }
-    return attributes.join("; ");
-}
-
-export function isSessionValid(config: Config, cookieHeader: string | undefined): boolean {
-    const value = readCookie(cookieHeader, cookieName);
-    if (!value) {
+    if (response.status === 401) {
         return false;
     }
-    const [expiresAtRaw, signature] = value.split(".");
-    const expiresAt = Number(expiresAtRaw);
-    if (!Number.isFinite(expiresAt) || expiresAt < Date.now() || !signature) {
-        return false;
-    }
-    return equals(sign(config, expiresAt), signature);
+    throw new Error(`oauth2-proxy answered ${response.status} to the session check`);
 }
 
-function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
-    for (const part of cookieHeader?.split(";") ?? []) {
-        const [key, ...rest] = part.trim().split("=");
-        if (key === name) {
-            return rest.join("=");
-        }
-    }
-    return undefined;
+/**
+ * Where a browser without a session is sent: the sign-in of oauth2-proxy on the base domain, which
+ * is the only host whose callback is registered with the provider. The way back is the full url,
+ * host included - left to itself, oauth2-proxy would only remember the path, and a sign-in that
+ * started on a preview would end up on the controller. oauth2-proxy only follows it to hosts of
+ * its whitelist_domains, so the base domain and the hosts below it.
+ */
+export function signInUrl(controllerUrl: string, returnTo: string): string {
+    return `${controllerUrl}${oauth2ProxyPrefix}/start?${new URLSearchParams({ rd: returnTo })}`;
 }
 
-/** Removes the controller cookie before a request is handed to a preview. */
-export function stripSessionCookie(cookieHeader: string | undefined): string | undefined {
+/** Removes the cookies of oauth2-proxy before a request is handed to a preview. */
+export function stripAuthCookies(cookieHeader: string | undefined): string | undefined {
     if (!cookieHeader) {
         return undefined;
     }
     const remaining = cookieHeader
         .split(";")
         .map((part) => part.trim())
-        .filter((part) => !part.startsWith(`${cookieName}=`));
+        .filter((part) => {
+            const name = part.split("=")[0];
+            return part !== "" && name !== cookieName && !name.startsWith(`${cookieName}_`);
+        });
     return remaining.length > 0 ? remaining.join("; ") : undefined;
-}
-
-/** Only same-origin paths are accepted, so the login form cannot be used as an open redirect. */
-export function safeRedirectTarget(value: string | undefined): string {
-    return value && /^\/[^/\\]/.test(value) ? value : "/";
 }

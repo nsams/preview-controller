@@ -1,17 +1,19 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
+import { oidcClient, OidcProvider } from "./oidc.ts";
+
 const execFileAsync = promisify(execFile);
 
 const projectDir = join(import.meta.dirname, "..", "..");
 
-export const password = "e2e-test-password";
 export const baseDomain = "preview.localhost";
 const port = 9123;
+const oauth2ProxyPort = 9124;
 
 export type Preview = {
     slug: string;
@@ -34,11 +36,25 @@ export function previewUrl(slug: string, name?: string): string {
  */
 export class Client {
     readonly url = `http://${baseDomain}:${port}`;
-    cookie: string | undefined;
+    /** The cookies the controller and oauth2-proxy set, as name=value. */
+    readonly cookies = new Map<string, string>();
 
-    /** Takes a full url, or a path on the controller. */
-    request(url: string, options: { method?: string; form?: Record<string, string>; headers?: Record<string, string> } = {}) {
+    get cookie(): string | undefined {
+        return this.cookies.size > 0 ? [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ") : undefined;
+    }
+
+    /** Takes a full url, or a path on the controller. Redirects are not followed. */
+    async request(url: string, options: { method?: string; form?: Record<string, string>; headers?: Record<string, string> } = {}) {
         const target = new URL(url, this.url);
+        // Anything but the controller, like the identity provider, is fetched as it is.
+        if (target.port !== String(port)) {
+            const response = await fetch(target, { redirect: "manual" });
+            return {
+                status: response.status,
+                headers: Object.fromEntries(response.headers) as Record<string, string | undefined>,
+                body: await response.text(),
+            };
+        }
         const body = options.form && new URLSearchParams(options.form).toString();
         const headers: Record<string, string> = { host: target.host, ...options.headers };
         if (body !== undefined) {
@@ -48,21 +64,38 @@ export class Client {
             headers.cookie = [headers.cookie, this.cookie].filter(Boolean).join("; ");
         }
         const path = target.pathname + target.search;
-        return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>((resolve, reject) => {
-            const outgoing = httpRequest({ host: "127.0.0.1", port, method: options.method ?? "GET", path, headers }, (incoming) => {
-                let text = "";
-                incoming.setEncoding("utf8");
-                incoming.on("data", (chunk: string) => (text += chunk));
-                incoming.on("end", () => resolve({ status: incoming.statusCode ?? 0, headers: incoming.headers, body: text }));
-            });
-            outgoing.on("error", reject);
-            outgoing.end(body);
-        });
+        const response = await new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>(
+            (resolve, reject) => {
+                const outgoing = httpRequest({ host: "127.0.0.1", port, method: options.method ?? "GET", path, headers }, (incoming) => {
+                    let text = "";
+                    incoming.setEncoding("utf8");
+                    incoming.on("data", (chunk: string) => (text += chunk));
+                    incoming.on("end", () => resolve({ status: incoming.statusCode ?? 0, headers: incoming.headers, body: text }));
+                });
+                outgoing.on("error", reject);
+                outgoing.end(body);
+            },
+        );
+        for (const cookie of [response.headers["set-cookie"] ?? []].flat()) {
+            const [name, ...value] = cookie.split(";")[0].split("=");
+            if (/max-age=0|expires=thu, 01 jan 1970/i.test(cookie)) {
+                this.cookies.delete(name);
+            } else {
+                this.cookies.set(name, value.join("="));
+            }
+        }
+        return response;
     }
 
+    /** Signs in through oauth2-proxy and the identity provider, like a browser would, following the redirects. */
     async login(): Promise<void> {
-        const response = await this.request("/__preview-controller/login", { method: "POST", form: { password } });
-        this.cookie = String(response.headers["set-cookie"]).split(";")[0];
+        let response = await this.request("/");
+        for (let hops = 0; response.status === 302 && hops < 10; hops++) {
+            response = await this.request(String(response.headers.location));
+        }
+        if (response.status !== 200) {
+            throw new Error(`Signing in ended with ${response.status}: ${response.body}`);
+        }
     }
 
     async previews(): Promise<Preview[]> {
@@ -118,10 +151,87 @@ export class Repository {
     }
 }
 
-/** The real controller on the docker daemon of the machine, with acme/demo cloned from disk. */
+/**
+ * The real oauth2-proxy with the configuration from oauth2-proxy/, signing in with the
+ * OidcProvider instead of GitHub. Runs the binary in OAUTH2_PROXY_BINARY if that is set, otherwise
+ * the docker image of oauth2-proxy/compose.yml.
+ */
+class Oauth2Proxy {
+    private process: ChildProcess | undefined;
+    private readonly containerName = `preview-controller-e2e-oauth2-proxy-${process.pid}`;
+
+    async start(issuer: string): Promise<void> {
+        const configFile = join(projectDir, "oauth2-proxy", "oauth2-proxy.cfg");
+        const options = [
+            `--http-address=127.0.0.1:${oauth2ProxyPort}`,
+            "--provider=oidc",
+            `--oidc-issuer-url=${issuer}`,
+            `--client-id=${oidcClient.id}`,
+            `--client-secret=${oidcClient.secret}`,
+            `--cookie-secret=${"e2e-cookie-secret-of-32-bytes!!!"}`,
+            `--redirect-url=http://${baseDomain}:${port}/__oauth2/callback`,
+            `--cookie-domain=.${baseDomain}`,
+            `--whitelist-domain=.${baseDomain}:${port}`,
+            "--cookie-secure=false",
+        ];
+        const binary = process.env.OAUTH2_PROXY_BINARY;
+        if (binary) {
+            this.process = spawn(binary, [`--config=${configFile}`, ...options], { stdio: ["ignore", "ignore", "inherit"] });
+        } else {
+            const compose = await readFile(join(projectDir, "oauth2-proxy", "compose.yml"), "utf8");
+            const image = /image: (\S+)/.exec(compose)?.[1] ?? "";
+            this.process = spawn(
+                "docker",
+                [
+                    "run",
+                    "--rm",
+                    "--name",
+                    this.containerName,
+                    "--network",
+                    "host",
+                    "-v",
+                    `${configFile}:/etc/oauth2-proxy.cfg:ro`,
+                    image,
+                    "--config=/etc/oauth2-proxy.cfg",
+                    ...options,
+                ],
+                { stdio: ["ignore", "ignore", "inherit"] },
+            );
+        }
+        const deadline = Date.now() + 60_000;
+        while (
+            !(await fetch(`http://127.0.0.1:${oauth2ProxyPort}/ready`).then(
+                (response) => response.ok,
+                () => false,
+            ))
+        ) {
+            if (Date.now() > deadline || this.process.exitCode !== null) {
+                throw new Error("oauth2-proxy did not come up");
+            }
+            await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+    }
+
+    async stop(): Promise<void> {
+        if (!process.env.OAUTH2_PROXY_BINARY) {
+            await execFileAsync("docker", ["rm", "--force", this.containerName]).catch(() => undefined);
+        }
+        const child = this.process;
+        if (child && child.exitCode === null && child.signalCode === null) {
+            await new Promise((resolve) => child.once("exit", resolve).kill());
+        }
+    }
+}
+
+/**
+ * The real controller on the docker daemon of the machine, with acme/demo cloned from disk,
+ * behind oauth2-proxy.
+ */
 export class Controller {
     readonly dataDir: string;
     readonly repository: Repository;
+    readonly identityProvider = new OidcProvider();
+    private readonly oauth2Proxy = new Oauth2Proxy();
     private readonly rootDir: string;
     private process: ChildProcess | undefined;
 
@@ -134,6 +244,8 @@ export class Controller {
     static async start(): Promise<Controller> {
         const controller = new Controller(await mkdtemp(join(tmpdir(), "preview-controller-e2e-")));
         await controller.repository.init(join(controller.rootDir, "github", "acme", "demo.git"));
+        await controller.identityProvider.start();
+        await controller.oauth2Proxy.start(controller.identityProvider.issuer);
         await controller.launch();
         return controller;
     }
@@ -146,7 +258,7 @@ export class Controller {
                 ...process.env,
                 PREVIEW_CONTROLLER_PORT: String(port),
                 PREVIEW_CONTROLLER_BASE_DOMAIN: baseDomain,
-                PREVIEW_CONTROLLER_PASSWORD: password,
+                PREVIEW_CONTROLLER_OAUTH2_PROXY_URL: `http://127.0.0.1:${oauth2ProxyPort}`,
                 PREVIEW_CONTROLLER_PORT_RANGE: "32000-32099",
                 PREVIEW_CONTROLLER_DATA_DIR: this.dataDir,
                 // The daemon may run previews of other controllers, which must never be removed.
@@ -173,6 +285,8 @@ export class Controller {
 
     async dispose(): Promise<void> {
         await this.stop();
+        await this.oauth2Proxy.stop();
+        await this.identityProvider.stop();
         await rm(this.rootDir, { recursive: true, force: true });
     }
 }

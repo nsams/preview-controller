@@ -1,0 +1,13 @@
+# oauth2-proxy next to the controller: docker compose up -d in this directory, after creating .env
+# from .env.tpl. The controller reaches it with PREVIEW_CONTROLLER_OAUTH2_PROXY_URL=http://127.0.0.1:4180.
+# Only published on the loopback interface, browsers always go through the controller.
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+    restart: unless-stopped
+    command: --config=/etc/oauth2-proxy.cfg
+    env_file: .env
+    volumes:
+      - ./oauth2-proxy.cfg:/etc/oauth2-proxy.cfg:ro
+    ports:
+      - "127.0.0.1:4180:4180"

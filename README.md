@@ -9,12 +9,14 @@ reachable under its own subdomain.
 
 ```bash
 npm install
-cp .env.secrets.tpl .env.secrets   # and put a password in it
-npm run build                      # the frontend
+echo PREVIEW_CONTROLLER_AUTH_DISABLED=true >> .env.local   # locally, without oauth2-proxy
+npm run build                                              # the frontend
 npm start
 ```
 
-Open `http://preview.localhost:9000`. Everything is behind one password.
+Open `http://preview.localhost:9000`. In a real deployment everything - the controller and every
+host of every preview - is behind [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/),
+see [Authentication](#authentication).
 
 The page has a form for organization, repository, branch and an optional start script, and lists
 the previews that exist. Everything but the branch is prefilled with the one used last, because
@@ -62,8 +64,9 @@ So:
 - Scope `PREVIEW_CONTROLLER_GITHUB_TOKEN` to exactly those repositories (see
   [Private repositories](#private-repositories)) - there is no allow-list beyond what the token
   can read.
-- Treat the password as access to the host. Anyone who has it can start a preview of any
-  repository the token or the host can reach.
+- Treat a sign-in as access to the host. Anyone who gets through oauth2-proxy can start a preview
+  of any repository the token or the host can reach, so restrict who may sign in (e.g. to the
+  members of one GitHub organization).
 - Run the controller on a host dedicated to previews, not next to anything that matters.
 
 ## Api
@@ -89,12 +92,13 @@ It works with the same json api a script would use:
 Next to the api, `GET /open/<org>/<repo>/<branch>` starts a preview like `/api/previews/start` and
 redirects the browser to it - the link of the [GitHub action](#link-from-github).
 
-All of them need the session cookie, so a browser has to sign in first. For scripts, sign in
-once and reuse the cookie:
+All of them need the session cookie of oauth2-proxy, so a browser has to sign in first. Without
+one, the api answers `401`. A script can reuse the `_oauth2_proxy` cookie of a browser session,
+which is valid for a week:
 
 ```bash
-curl -c cookies.txt -d "password=$PREVIEW_PASSWORD" http://preview.localhost:9000/__preview-controller/login
-curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=vivid-planet&repo=dextinity-starter&branch=main"
+export PREVIEW_SESSION="<value of the _oauth2_proxy cookie in the browser>"
+curl -b "_oauth2_proxy=$PREVIEW_SESSION" "http://preview.localhost:9000/api/previews/start?org=vivid-planet&repo=dextinity-starter&branch=main"
 ```
 
 ## Frontend
@@ -105,10 +109,11 @@ like the admin of [dextinity-starter](https://github.com/vivid-planet/dextinity-
 That pins mui to 7 and react-router to 5, the versions `@dextinity/admin` supports, and brings
 its other peer dependencies (apollo, final-form, react-intl, the mui x packages, ...) along even
 though only the theme, layout, buttons, alerts and fields are used. The controller serves the build from `frontend/dist` on the
-base domain, behind the same password, and answers every path that is not a file or under `/api`
+base domain, behind oauth2-proxy like everything else, and answers every path that is not a file or under `/api`
 with its `index.html`, so the frontend does the routing. The only pages still rendered by the
 controller itself are the ones a preview host shows in place of the preview - starting, failed,
-unknown - and the login, because all of them have to work on every host.
+unknown - because they have to work on every host. When the session runs out while the frontend
+is open, it offers to sign in again, which is a reload of the page.
 
 The api lives in [src/api.ts](src/api.ts) as one chained hono app. The frontend imports only its
 type and talks to it through hono's typed client (`hc<ApiType>`), so paths, parameters and response
@@ -128,7 +133,7 @@ them afterwards.
 
 Open the controller as usual, `http://preview.localhost:9000/`. `npm run dev:backend` sets
 `PREVIEW_CONTROLLER_FRONTEND_DEV_SERVER_PORT=5173`, so instead of `frontend/dist` the controller
-passes every request for the frontend on to vite, behind the same password - every link of the
+passes every request for the frontend on to vite, behind the same authentication - every link of the
 controller, the ones on the starting and failed pages of a preview included, ends up in the dev
 server. Only the hot reload websocket connects to vite on port 5173 directly.
 
@@ -180,8 +185,8 @@ the page opens it again as soon as the preview or one of its services comes back
 The same is available as plain text:
 
 ```bash
-curl -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs?source=start"
-curl -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs?service=api&tail=500"
+curl -b "_oauth2_proxy=$PREVIEW_SESSION" "http://preview.localhost:9000/api/previews/<slug>/logs?source=start"
+curl -b "_oauth2_proxy=$PREVIEW_SESSION" "http://preview.localhost:9000/api/previews/<slug>/logs?service=api&tail=500"
 ```
 
 `source` is `containers` (default) or `start`, `tail` defaults to 200 lines. With `/logs/stream`
@@ -190,13 +195,13 @@ event with what is there already, an `append` event for every new piece of outpu
 text as a json string, and for the container log an `end` event once compose stops following.
 
 ```bash
-curl -N -b cookies.txt "http://preview.localhost:9000/api/previews/<slug>/logs/stream?service=api"
+curl -N -b "_oauth2_proxy=$PREVIEW_SESSION" "http://preview.localhost:9000/api/previews/<slug>/logs/stream?service=api"
 ```
 
 ## Configuration
 
 Everything comes from the environment. `.env` holds the defaults and is committed, `.env.local`
-overrides them for one machine, and `.env.secrets` holds the password - the last two are not
+overrides them for one machine, and `.env.secrets` holds the GitHub token - the last two are not
 committed. Variables that are already set in the shell win over all of them.
 
 | Variable                                  | Default       | Description                                                       |
@@ -204,7 +209,8 @@ committed. Variables that are already set in the shell win over all of them.
 | `PREVIEW_CONTROLLER_PORT`                 | `9000`        | Port the controller listens on, the only published port           |
 | `PREVIEW_CONTROLLER_BASE_DOMAIN`          | -             | Previews live on `<slug>.<base domain>`, the controller on itself |
 | `PREVIEW_CONTROLLER_SCHEME`               | `http`        | `http` or `https`, for urls and secure cookies                    |
-| `PREVIEW_CONTROLLER_PASSWORD`             | -             | Shared password, belongs in `.env.secrets`                        |
+| `PREVIEW_CONTROLLER_OAUTH2_PROXY_URL`     | -             | oauth2-proxy every request is checked against, see below          |
+| `PREVIEW_CONTROLLER_AUTH_DISABLED`        | -             | `true` switches authentication off, for local development only    |
 | `PREVIEW_CONTROLLER_IDLE_TIMEOUT_MINUTES` | `60`          | Stop a preview after this long without a request                  |
 | `PREVIEW_CONTROLLER_REMOVE_AFTER_DAYS`    | `7`           | Delete a preview stopped this long, `0` switches the cleanup off  |
 | `PREVIEW_CONTROLLER_PORT_RANGE`           | `31000-31099` | Range the per-preview ports are taken from                        |
@@ -226,7 +232,7 @@ that contains it.
 Without a token, only public repositories work, plus whatever the git configuration of the host
 can authenticate on its own.
 
-There is no allow-list of repositories: whoever knows the password can start a preview of any
+There is no allow-list of repositories: whoever can sign in can start a preview of any
 repository the token or the host can reach, and that preview builds and runs the code of that
 repository. Scoping the token to the repositories that should be previewable is what keeps this
 narrow - a fine-grained token can be limited to single repositories. A GitHub App installation
@@ -236,6 +242,51 @@ would do the same job with short lived tokens and without hanging off a personal
 For a real deployment point a wildcard dns record at the host and put the controller behind a
 reverse proxy that terminates tls. One wildcard is enough, because every host of a preview is a
 single label under the base domain - see below.
+
+### Authentication
+
+Who may use the controller and the previews is decided by
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/), with any provider it supports -
+[oauth2-proxy/](oauth2-proxy) has the configuration and a compose file for GitHub, restricted to
+the members of an organization:
+
+```bash
+cd oauth2-proxy
+cp .env.tpl .env      # domain, OAuth app, cookie secret
+docker compose up -d  # listens on 127.0.0.1:4180
+```
+
+oauth2-proxy does not sit in front of the controller but next to it, and proxies nothing. The
+controller stays the one port browsers talk to, and:
+
+- asks `/__oauth2/auth` of oauth2-proxy for every request, on every host, whether its cookies
+  carry a session. Without one, a browser is redirected to the sign-in, the api answers `401`.
+  Should oauth2-proxy not answer, nothing gets through.
+- passes `/__oauth2/*` - sign-in, callback, sign-out - on to oauth2-proxy, on every host. The
+  prefix is not the default `/oauth2`, because the paths of the previews are theirs, and a project
+  may well have an `/oauth2` of its own.
+- strips the `_oauth2_proxy*` cookies before a request is passed to a preview.
+
+What makes this work for the hosts of the previews:
+
+- **One callback.** A provider only calls back to registered urls, and every preview has hosts
+  of its own. So the sign-in always happens on the base domain, and `redirect_url` is
+  `https://<base domain>/__oauth2/callback` - the only url to register with the provider.
+- **The way back is the full url.** Left to itself, oauth2-proxy only remembers the path of the
+  request that needed the sign-in, and someone who opened `admin--<slug>.<base domain>/foo` would
+  end up on `<base domain>/foo`. The controller therefore starts the sign-in itself, with the
+  full url as `rd`: `/__oauth2/start?rd=https://admin--<slug>.<base domain>/foo`. oauth2-proxy
+  only follows it to hosts in `whitelist_domains`, which is `.<base domain>` - the base domain
+  and every host below it, but nothing else, so it is no open redirect.
+- **One cookie for all hosts.** `cookie_domains` is `.<base domain>`, so the session that the
+  callback sets on the base domain is sent to every preview host as well, iframes included -
+  signing in once is enough for all previews. Locally, with a port in the url, the whitelist
+  needs the port too: `.preview.localhost:9000`.
+
+Signing out is `/__oauth2/sign_out`, on any host.
+
+`PREVIEW_CONTROLLER_AUTH_DISABLED=true` switches all of this off for local development. The
+controller then only listens on `127.0.0.1`, and has to be opened on the machine it runs on.
 
 ## How it works
 
@@ -296,9 +347,7 @@ single label under the base domain - see below.
   asked for their repository and branch and which hold the urls a project reported. The only thing kept in memory is when a preview was
   last requested, because nothing else can know that. After a restart every running preview
   therefore gets a fresh idle period, which is cheaper than wrongly stopping everything.
-- **Authentication** is a single shared password. Signing in sets a signed cookie on the base
-  domain, which makes it valid for all preview subdomains including iframes. The cookie is
-  stripped again before a request is passed to a preview.
+- **Authentication** is left to oauth2-proxy, see [Authentication](#authentication).
 
 ## What a project has to provide
 
@@ -308,7 +357,7 @@ executable start script that leaves a running docker compose project behind. By 
 it when a preview is started:
 
 ```bash
-curl -b cookies.txt "http://preview.localhost:9000/api/previews/start?org=nsams&repo=preview-controller&branch=main&script=example/start-preview.sh"
+curl -b "_oauth2_proxy=$PREVIEW_SESSION" "http://preview.localhost:9000/api/previews/start?org=nsams&repo=preview-controller&branch=main&script=example/start-preview.sh"
 ```
 
 The script is a path relative to the root of the repository, without `.` or `..` segments. It is
@@ -401,6 +450,13 @@ cloned from a bare repository on disk, through a git `insteadOf` rewrite in the 
 controller. Every test pushes a branch of its own and deletes its previews afterwards. A chromium
 that is installed elsewhere can be used with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
+The controller runs with the real oauth2-proxy and its configuration from
+[oauth2-proxy/](oauth2-proxy), started from the docker image of the compose file there, or from
+the binary in `OAUTH2_PROXY_BINARY` if that is set. Instead of GitHub it signs in with a minimal
+OpenID Connect provider in [e2e/support/oidc.ts](e2e/support/oidc.ts), which lets everyone in
+right away - that is how the tests check that a sign-in started on a preview host comes back to
+it.
+
 Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.github/workflows/test.yml).
 
 ## Limitations
@@ -414,4 +470,4 @@ Both run in GitHub Actions on every push, see [.github/workflows/test.yml](.gith
 - One controller process manages the docker daemon it runs on. There is no scheduling across
   hosts and no limit on how many previews run at once beyond the port range.
 - The frontend polls `docker stats`, which takes a moment when many containers run.
-- Removing is confirmed in the browser, but the api trusts whoever has the password.
+- Removing is confirmed in the browser, but the api trusts whoever is signed in.

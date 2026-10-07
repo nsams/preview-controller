@@ -1,59 +1,56 @@
 import assert from "node:assert/strict";
+import { createServer, type IncomingHttpHeaders } from "node:http";
+import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 
-import { createSessionCookie, isPasswordCorrect, isSessionValid, safeRedirectTarget, stripSessionCookie } from "./auth.ts";
+import { hasSession, signInUrl, stripAuthCookies } from "./auth.ts";
 import type { Config } from "./config.ts";
 
-const config = { password: "correct-password", baseDomain: "preview.example.com", scheme: "https" } as Config;
-
-const [cookieName] = createSessionCookie(config).split("=");
-
-function sessionValue(cookie: string): string {
-    return cookie.split(";")[0].slice(cookieName.length + 1);
+/** Stands in for oauth2-proxy, answering its auth endpoint with the given status. */
+async function withOauth2Proxy(status: number, run: (config: Config & { oauth2ProxyUrl: string }, received: IncomingHttpHeaders[]) => Promise<void>) {
+    const received: IncomingHttpHeaders[] = [];
+    const server = createServer((request, response) => {
+        received.push({ ...request.headers, path: request.url });
+        response.writeHead(status).end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+        const { port } = server.address() as AddressInfo;
+        await run({ oauth2ProxyUrl: `http://127.0.0.1:${port}` } as Config & { oauth2ProxyUrl: string }, received);
+    } finally {
+        server.close();
+    }
 }
 
-test("only the configured password is correct", () => {
-    assert.equal(isPasswordCorrect(config, "correct-password"), true);
-    assert.equal(isPasswordCorrect(config, "correct-passwor"), false);
-    assert.equal(isPasswordCorrect(config, ""), false);
+test("a session is what the auth endpoint of oauth2-proxy says it is", async () => {
+    await withOauth2Proxy(202, async (config, received) => {
+        assert.equal(await hasSession(config, "_oauth2_proxy=abc"), true);
+        assert.deepEqual(
+            received.map(({ path, cookie }) => ({ path, cookie })),
+            [{ path: "/__oauth2/auth", cookie: "_oauth2_proxy=abc" }],
+        );
+    });
+    await withOauth2Proxy(401, async (config) => assert.equal(await hasSession(config, undefined), false));
 });
 
-test("the session cookie covers the base domain and is secure over https", () => {
-    const cookie = createSessionCookie(config);
-    assert.match(cookie, /; Domain=preview\.example\.com;/);
-    assert.match(cookie, /; HttpOnly;/);
-    assert.match(cookie, /; SameSite=Lax;/);
-    assert.match(cookie, /; Secure$/);
-    assert.doesNotMatch(createSessionCookie({ ...config, scheme: "http" }), /Secure/);
-});
-
-test("a session is valid until it expires, and only with its own signature", () => {
-    const value = sessionValue(createSessionCookie(config));
-    const [expiresAt, signature] = value.split(".");
-
-    assert.equal(isSessionValid(config, `other=1; ${cookieName}=${value}`), true);
-    assert.equal(isSessionValid({ ...config, password: "another-password" }, `${cookieName}=${value}`), false);
-    assert.equal(isSessionValid(config, `${cookieName}=${Number(expiresAt) + 1}.${signature}`), false);
-    assert.equal(isSessionValid(config, `${cookieName}=${expiresAt}.`), false);
-    assert.equal(isSessionValid(config, `${cookieName}=garbage`), false);
-    assert.equal(isSessionValid(config, undefined), false);
-});
-
-test("an expired session is not valid", (t) => {
-    const value = sessionValue(createSessionCookie(config));
-    t.mock.timers.enable({ apis: ["Date"], now: Date.now() + 8 * 24 * 60 * 60 * 1000 });
-    assert.equal(isSessionValid(config, `${cookieName}=${value}`), false);
-});
-
-test("the session cookie is stripped before a request reaches a preview", () => {
-    assert.equal(stripSessionCookie(`a=1; ${cookieName}=secret; b=2`), "a=1; b=2");
-    assert.equal(stripSessionCookie(`${cookieName}=secret`), undefined);
-    assert.equal(stripSessionCookie(undefined), undefined);
-});
-
-test("only local paths are redirect targets", () => {
-    assert.equal(safeRedirectTarget("/previews/x?y=1"), "/previews/x?y=1");
-    for (const target of ["//evil.example.com", "/\\evil.example.com", "https://evil.example.com", "", undefined]) {
-        assert.equal(safeRedirectTarget(target), "/", String(target));
+test("anything but a clear answer of oauth2-proxy lets nothing through", async () => {
+    for (const status of [200, 302, 403, 500]) {
+        await withOauth2Proxy(status, async (config) => {
+            await assert.rejects(hasSession(config, "_oauth2_proxy=abc"), new RegExp(`answered ${status}`));
+        });
     }
+});
+
+test("the sign-in happens on the base domain and leads back to the full url", () => {
+    assert.equal(
+        signInUrl("https://preview.example.com", "https://admin--acme-demo-main.preview.example.com/a?b=1"),
+        "https://preview.example.com/__oauth2/start?rd=https%3A%2F%2Fadmin--acme-demo-main.preview.example.com%2Fa%3Fb%3D1",
+    );
+});
+
+test("the cookies of oauth2-proxy are stripped before a request reaches a preview", () => {
+    assert.equal(stripAuthCookies("a=1; _oauth2_proxy=secret; b=2"), "a=1; b=2");
+    assert.equal(stripAuthCookies("_oauth2_proxy_0=x; _oauth2_proxy_1=y; _oauth2_proxy_abc_csrf=z"), undefined);
+    assert.equal(stripAuthCookies("_oauth2_proxyish=1; my_oauth2_proxy=2"), "_oauth2_proxyish=1; my_oauth2_proxy=2");
+    assert.equal(stripAuthCookies(undefined), undefined);
 });

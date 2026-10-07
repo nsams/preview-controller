@@ -4,7 +4,12 @@ export type Config = {
     port: number;
     baseDomain: string;
     scheme: "http" | "https";
-    password: string;
+    /**
+     * The oauth2-proxy every request is checked against, see auth.ts. Undefined only when
+     * authentication is switched off for local development, which also keeps the controller on
+     * the loopback interface.
+     */
+    oauth2ProxyUrl?: string;
     idleTimeoutMinutes: number;
     removeAfterDays: number;
     portRange: { from: number; to: number };
@@ -63,9 +68,10 @@ export function loadConfig(): Config {
         fail(`${prefix}SCHEME must be "http" or "https"`);
     }
 
-    const password = readString("PASSWORD");
-    if (password.length < 8) {
-        fail(`${prefix}PASSWORD must be at least 8 characters`);
+    const isAuthDisabled = process.env[`${prefix}AUTH_DISABLED`]?.trim() === "true";
+    const oauth2ProxyUrl = isAuthDisabled ? undefined : readString("OAUTH2_PROXY_URL").replace(/\/+$/, "");
+    if (oauth2ProxyUrl !== undefined && !/^https?:\/\/[^/]+$/.test(oauth2ProxyUrl)) {
+        fail(`${prefix}OAUTH2_PROXY_URL must be an http or https url without a path, like "http://127.0.0.1:4180"`);
     }
 
     const removeAfterDays = Number(process.env[`${prefix}REMOVE_AFTER_DAYS`] ?? 7);
@@ -77,7 +83,7 @@ export function loadConfig(): Config {
         port: readNumber("PORT", 9000),
         baseDomain: readString("BASE_DOMAIN").toLowerCase(),
         scheme,
-        password,
+        oauth2ProxyUrl,
         idleTimeoutMinutes: readNumber("IDLE_TIMEOUT_MINUTES", 60),
         removeAfterDays,
         portRange: readPortRange(),

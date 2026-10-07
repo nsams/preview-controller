@@ -42,8 +42,7 @@ export const test = base.extend<{ api: Client; branch: string; slug: string }, {
     },
     // Browsers resolve *.localhost on their own. Every page starts signed in on the status page.
     page: async ({ page, api }, use) => {
-        const [name, value] = (api.cookie ?? "").split("=");
-        await page.context().addCookies([{ name, value, domain: `.${baseDomain}`, path: "/" }]);
+        await page.context().addCookies([...api.cookies].map(([name, value]) => ({ name, value, domain: `.${baseDomain}`, path: "/" })));
         await page.goto("/");
         await use(page);
     },

@@ -6,7 +6,7 @@ import type { ApiType } from "../../src/api.ts";
 /** Typed client of the controller api, see src/api.ts. */
 const client = hc<ApiType>("/api");
 
-/** The session cookie is missing or expired, the user has to sign in again. */
+/** The session of oauth2-proxy is missing or expired, the user has to sign in again. */
 export class UnauthorizedError extends Error {}
 
 /**

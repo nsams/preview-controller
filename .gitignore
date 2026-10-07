@@ -4,7 +4,7 @@ data/
 .env.local
 .env.secrets
 
-# Obsolete, the configuration moved to .env - delete it once the password is in .env.secrets
+# Obsolete, the configuration moved to .env
 preview-controller.config.json
 frontend/dist
 # Playwright CLI output (may contain credentials)
@@ -19,3 +19,6 @@ test-results/
 
 # dev-process-manager daemon
 .pm.sock
+
+# Secrets of oauth2-proxy, see oauth2-proxy/.env.tpl
+oauth2-proxy/.env

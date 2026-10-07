@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cannotOpenPage, failedPage, loginPage, startingPage, unknownHostPage } from "./pages.ts";
+import { cannotOpenPage, failedPage, startingPage, unknownHostPage } from "./pages.ts";
 import type { Preview } from "./previews.ts";
 
 const payload = `"><script>alert(1)</script>`;
@@ -16,22 +16,11 @@ const preview: Preview = {
 };
 
 test("nothing a project or a visitor controls ends up as markup", () => {
-    const pages = [
-        loginPage(payload, payload),
-        startingPage(preview, "http://x"),
-        failedPage(preview, "http://x"),
-        unknownHostPage(payload),
-        cannotOpenPage(payload),
-    ];
+    const pages = [startingPage(preview, "http://x"), failedPage(preview, "http://x"), unknownHostPage(payload), cannotOpenPage(payload)];
     for (const page of pages) {
         assert.ok(!page.includes("<script>alert(1)"), page);
         assert.ok(page.includes("&lt;script&gt;alert(1)&lt;/script&gt;"), page);
     }
-});
-
-test("the login page leads back to where it was asked for", () => {
-    assert.match(loginPage("/previews/x"), /name="redirectTo" value="\/previews\/x"/);
-    assert.match(loginPage("/", "Wrong password"), /class="error">Wrong password</);
 });
 
 test("the starting page reloads itself, the failed page does not", () => {

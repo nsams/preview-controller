@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { describeRef, type Preview } from "./previews.ts";
 
 // The controller host itself is the react frontend in frontend/. What is left here are the pages
-// shown on the hosts of a preview in its place - which is where no frontend of the controller runs -
-// and the login, which has to work on all of them.
+// shown on the hosts of a preview in its place - which is where no frontend of the controller runs.
+// Signing in is left to oauth2-proxy, see auth.ts.
 
 function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, (character) => {
@@ -13,8 +13,7 @@ function escapeHtml(value: string): string {
     });
 }
 
-// Inlined, because a request for /favicon.svg on the host of a preview goes to the preview, and
-// without a session it gets the login page.
+// Inlined, because a request for /favicon.svg on the host of a preview goes to the preview.
 const favicon = `data:image/svg+xml;base64,${readFileSync(new URL("../frontend/public/favicon.svg", import.meta.url)).toString("base64")}`;
 
 const styles = `
@@ -30,10 +29,6 @@ const styles = `
     p.lead { margin: 0 0 24px; color: var(--muted); }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
     a { color: var(--accent); }
-    form { display: flex; gap: 8px; }
-    input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
-        background: var(--bg); color: var(--fg); font: inherit; }
-    button { padding: 10px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
     .error { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: #c0392b22; color: #c0392b; font-size: 14px; }
     .spinner { width: 28px; height: 28px; margin-bottom: 16px; border: 3px solid var(--border);
         border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
@@ -55,22 +50,6 @@ function layout(title: string, body: string, head = ""): string {
     <body><main>${body}</main></body>
 </html>
 `;
-}
-
-export function loginPage(redirectTo: string, error?: string): string {
-    return layout(
-        "Preview login",
-        `<h1>Preview</h1>
-        <p class="lead">This environment is password protected.</p>
-        <div class="card">
-            ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
-            <form method="post" action="/__preview-controller/login">
-                <input type="hidden" name="redirectTo" value="${escapeHtml(redirectTo)}" />
-                <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password" />
-                <button type="submit">Sign in</button>
-            </form>
-        </div>`,
-    );
 }
 
 export function startingPage(preview: Preview, controllerUrl: string): string {
